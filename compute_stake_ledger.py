@@ -47,9 +47,7 @@ class StakeTransaction:
 
 
 class StakeTxAdapter(BaseTransaction):
-    """
-    Адаптер StakeTransaction -> BaseTransaction для SealevelEngine.
-    """
+  
     def __init__(self, stx: StakeTransaction, ledger: "ComputeStakeLedger"):
         super().__init__(stx.tx_id)
         self.stx = stx
@@ -124,9 +122,7 @@ class ComputeStakeLedger:
 
         conn.commit()
         conn.close()
-    # --------------------------------------------------------------
-    # 1) Методы чтения
-    # --------------------------------------------------------------
+  
     def get_stake(self, owner_address: str) -> float:
         """
         Возвращает общий стейк (stake_balance[node_id]) => 
@@ -165,9 +161,7 @@ class ComputeStakeLedger:
             out[nd] = float(val)
         return out
 
-    # --------------------------------------------------------------
-    # 2) stake_for_dataset (аналогично, owner_address -> DB node_id)
-    # --------------------------------------------------------------
+   
     def stake_for_dataset(self, dataset_id: str, owner_address: str, amount: float) -> bool:
         """
         Увеличить стейк owner_address на amount, 
@@ -362,9 +356,7 @@ class ComputeStakeLedger:
             conn.close()
             logging.warning(f"[ComputeStakeLedger] slash_stake => user={owner_address}, old={old_val}, new=0 => all ds=0")
 
-    # --------------------------------------------------------------
-    # propose_stake_change => (глобально, без dataset_id)
-    # --------------------------------------------------------------
+  
     def propose_stake_change(
         self,
         owner_address: str,
@@ -437,9 +429,7 @@ class ComputeStakeLedger:
         conn.close()
 
         logging.info(f"[ComputeStakeLedger] APPLIED stakeTx={stx.tx_id}, user={stx.owner_address}, amt={stx.amount}, newStake={new_val}")
-    # --------------------------------------------------------------
-    # Batch-проверка ECDSA
-    # --------------------------------------------------------------
+
     def _schedule_batch_stake(self, stx: StakeTransaction):
         self._pending_stx.append(stx)
 
@@ -500,9 +490,6 @@ class ComputeStakeLedger:
                 out.append((False, stx))
         return out
 
-    # --------------------------------------------------------------
-    # Sealevel batch
-    # --------------------------------------------------------------
     async def run_sealevel_batch(self, sealevel_engine, stx_list: List[StakeTransaction]):
         adapters = []
         for stx in stx_list:
@@ -511,16 +498,12 @@ class ComputeStakeLedger:
         await sealevel_engine.process_batch(adapters)
         logging.info(f"[ComputeStakeLedger] run_sealevel_batch => done => {len(stx_list)} stakeTx")
 
-    # --------------------------------------------------------------
-    # Генерация tx_id
-    # --------------------------------------------------------------
+ 
     def _make_tx_id(self, owner_address: str, amount: float) -> str:
         raw = f"{owner_address}-{amount}-{time.time()}"
         return hashlib.sha256(raw.encode('utf-8')).hexdigest()
 
-    # --------------------------------------------------------------
-    # Остановка
-    # --------------------------------------------------------------
+  
     async def stop(self):
         """
         Останавливаем фоновую задачу batch-проверки.
@@ -636,9 +619,7 @@ class ComputeStakeLedger:
         logging.info(f"[ComputeStakeLedger] delete_ledger_in_chord => key={key}, tombstone.")
 
 
-    # ----------------------------------------------------------------
-    # Helpers
-    # ----------------------------------------------------------------
+ 
     def _get_all_txs_from_db(self) -> List[StakeTransaction]:
         conn = sqlite3.connect(self.local_db_path)
         c = conn.cursor()
