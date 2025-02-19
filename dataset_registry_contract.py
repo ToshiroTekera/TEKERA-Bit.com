@@ -15,13 +15,7 @@ class DatasetRegistryContract:
         min_stake_required: float = 10.0,
         max_baseline_acc: float = 0.90
     ):
-        """
-        :param stake_ledger: экземпляр ComputeStakeLedger
-        :param cub_tekera:   экземпляр CubTekera (с полем self.address)
-        :param db_path:      путь к SQLite для хранения dataset_registry
-        :param min_stake_required: минимально допустимый stake, TEKERA
-        :param max_baseline_acc:   если baseline_acc > этого порога => reject
-        """
+      
         self.stake_ledger = stake_ledger
         self.cub_tekera = cub_tekera
         self.db_path = db_path
@@ -38,7 +32,7 @@ class DatasetRegistryContract:
         self.logger.info(f"[DatasetRegistry] init_db => {self.db_path}")
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("PRAGMA journal_mode=WAL;")
-            # owner_address храним как текст (например, "addr_abc123...").
+           
             await db.execute("""
             CREATE TABLE IF NOT EXISTS dataset_registry(
                 dataset_id TEXT PRIMARY KEY,
@@ -74,7 +68,7 @@ class DatasetRegistryContract:
                 self.logger.warning(f"[DatasetRegistry] ds={dataset_id}, status={old_status} => skip mining_proved.")
                 return False
 
-            # Проверка acc >0.99 или <0.80 => suspicious => частично слэшим
+           
             if final_acc > 0.99 or final_acc < 0.80:
                 self.logger.warning(
                     f"[DatasetRegistry] ds={dataset_id}, final_acc={final_acc} => suspicious => slash or skip."
@@ -84,7 +78,7 @@ class DatasetRegistryContract:
                                          reason="Trivial or worthless dataset in mining")
                 return False
 
-            # Если всё норм => ставим статус='mining_proved' (пример)
+           
             await db.execute(
                 "UPDATE dataset_registry SET status='mining_proved' WHERE dataset_id=?",
                 (dataset_id,)
@@ -280,7 +274,7 @@ class DatasetRegistryContract:
                 self.logger.warning(f"[DatasetRegistry] return_stake => ds={dataset_id}, fail on unstake.")
                 return False
 
-            # Обновляем в локальной БД
+            
             await db.execute(
                 "UPDATE dataset_registry SET status='closed' WHERE dataset_id=?",
                 (dataset_id,)
