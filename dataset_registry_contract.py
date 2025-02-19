@@ -6,10 +6,6 @@ from typing import Optional, Dict, Any
 logging.basicConfig(level=logging.INFO)
 
 class DatasetRegistryContract:
-    """
-    Пример &laquo;production‐ready&raquo; DatasetRegistry, 
-    согласованный с CubTekera.address (addr_...).
-    """
 
     def __init__(
         self,
@@ -36,9 +32,7 @@ class DatasetRegistryContract:
         self._db_initialized = False
 
     async def init_db(self):
-        """
-        Инициализация таблицы (однократно).
-        """
+    
         if self._db_initialized:
             return
         self.logger.info(f"[DatasetRegistry] init_db => {self.db_path}")
@@ -60,11 +54,7 @@ class DatasetRegistryContract:
 
 
     async def mark_dataset_mined(self, dataset_id: str, final_acc: float) -> bool:
-        """
-        Пример метода: при слишком большом финальном acc (>0.99)
-        или слишком маленьком (<0.80), мы делаем partial slash.
-        Иначе ставим статус='mining_proved'.
-        """
+  
         await self.init_db()
         async with aiosqlite.connect(self.db_path) as db:
             row = await db.execute_fetchone(
@@ -89,7 +79,7 @@ class DatasetRegistryContract:
                 self.logger.warning(
                     f"[DatasetRegistry] ds={dataset_id}, final_acc={final_acc} => suspicious => slash or skip."
                 )
-                # Сожгём 50% стейка
+                
                 await self.slash_dataset(dataset_id, slash_ratio=0.5,
                                          reason="Trivial or worthless dataset in mining")
                 return False
@@ -104,21 +94,19 @@ class DatasetRegistryContract:
         self.logger.info(f"[DatasetRegistry] ds={dataset_id} => mining_proved => final_acc={final_acc}")
         return True
 
-    # ---------------------------------------------------------
-    # 1) propose_dataset
-    # ---------------------------------------------------------
+
     async def propose_dataset(self, dataset_id: str, owner_address: str, stake_amount_tekera: float) -> bool:
        
         await self.init_db()
 
-        # (А) Проверка минимального стейка
+       
         if stake_amount_tekera < self.min_stake_required:
             self.logger.warning(
                 f"[DatasetRegistry] propose_dataset => stake={stake_amount_tekera} < min={self.min_stake_required}"
             )
             return False
 
-        # (B) Проверка совпадения адреса (production‐идеология)
+        
         if owner_address != self.cub_tekera.address:
             self.logger.warning(
                 f"[DatasetRegistry] propose_dataset => mismatch address => given={owner_address}, "
@@ -126,7 +114,7 @@ class DatasetRegistryContract:
             )
             return False
 
-        # (C) Проверяем, нет ли уже dataset_id
+        
         async with aiosqlite.connect(self.db_path) as db:
             row = await db.execute_fetchone(
                 "SELECT dataset_id FROM dataset_registry WHERE dataset_id=?",
@@ -136,14 +124,14 @@ class DatasetRegistryContract:
             self.logger.warning(f"[DatasetRegistry] dataset_id={dataset_id} exists => skip propose.")
             return False
 
-        # (D) Списываем stake через cub_tekera (address-based)
+        
         stake_amount_terabit = int(stake_amount_tekera * self.cub_tekera.TEKERA_TO_TERABIT)
         ok = await self.cub_tekera.stake_dataset(dataset_id, stake_amount_terabit)
         if not ok:
             self.logger.warning("[DatasetRegistry] propose_dataset => stake_dataset failed => stop.")
             return False
 
-        # (E) Пишем в локальную БД
+        
         now_ts = time.time()
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("""
@@ -157,14 +145,9 @@ class DatasetRegistryContract:
         )
         return True
 
-    # ---------------------------------------------------------
-    # 2) approve_dataset
-    # ---------------------------------------------------------
+  
     async def approve_dataset(self, dataset_id: str) -> bool:
-        """
-        Меняем статус => 'approved', если baseline_acc <= max_baseline_acc.
-        Иначе => 'rejected'.
-        """
+      
         await self.init_db()
         async with aiosqlite.connect(self.db_path) as db:
             row = await db.execute_fetchone(
@@ -187,7 +170,7 @@ class DatasetRegistryContract:
                 return False
 
             if bacc > self.max_baseline_acc:
-                # Логика: dataset слишком простой => reject
+                
                 self.logger.warning(
                     f"[DatasetRegistry] ds={dataset_id}, baseline_acc={bacc} > max={self.max_baseline_acc} => REJECT"
                 )
@@ -198,7 +181,7 @@ class DatasetRegistryContract:
                 await db.commit()
                 return False
 
-            # Иначе approve
+            
             await db.execute(
                 "UPDATE dataset_registry SET status='approved' WHERE dataset_id=?",
                 (dataset_id,)
@@ -208,15 +191,9 @@ class DatasetRegistryContract:
         self.logger.info(f"[DatasetRegistry] APPROVED => ds={dataset_id}")
         return True
 
-    # ---------------------------------------------------------
-    # 3) slash_dataset
-    # ---------------------------------------------------------
+  
     async def slash_dataset(self, dataset_id: str, slash_ratio: float=1.0, reason: str="fake") -> bool:
-        """
-        Сжечь стейк dataset_id (частично или полностью).
-        :param slash_ratio: 0..1 => какую долю сжигать
-        :param reason: строка для логов
-        """
+      
         if slash_ratio <= 0:
             self.logger.warning(f"[DatasetRegistry] slash_dataset => ratio={slash_ratio} <=0 => skip.")
             return False
@@ -250,10 +227,9 @@ class DatasetRegistryContract:
                     f"[DatasetRegistry] partial slash => ds={dataset_id}, ratio={slash_ratio}, slash_amt={slash_amt}, reason={reason}"
                 )
 
-                # (A) обнулим staked_amt (unstake всё)
+                
                 self.stake_ledger.unstake_dataset_amount(dataset_id, owner_addr, staked_full)
-                # (B) Если хотим оставить часть => нужно вновь &laquo;re-stake&raquo; (staked_full - slash_amt),
-                #     но зависит от вашей логики. Для простоты можно этого не делать.
+              
 
                 new_stake = stake_amt * (1 - slash_ratio)
                 await db.execute(
@@ -277,11 +253,7 @@ class DatasetRegistryContract:
     # 4) return_stake
     # ---------------------------------------------------------
     async def return_stake(self, dataset_id: str) -> bool:
-        """
-        Возвращаем стейк владельцу (unstake_dataset).
-        Проверяем, что dataset_id есть, status in (proposed, approved).
-        Ставим status='closed'.
-        """
+ 
         await self.init_db()
         async with aiosqlite.connect(self.db_path) as db:
             row = await db.execute_fetchone(
@@ -302,7 +274,7 @@ class DatasetRegistryContract:
                 )
                 return False
 
-            # Вызываем cub_tekera.unstake_dataset
+            
             ok = await self.cub_tekera.unstake_dataset(dataset_id)
             if not ok:
                 self.logger.warning(f"[DatasetRegistry] return_stake => ds={dataset_id}, fail on unstake.")
