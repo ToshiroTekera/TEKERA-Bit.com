@@ -14,10 +14,7 @@ from trans import Transaction
 logging.basicConfig(level=logging.INFO)
 
 class CubTekera:
-    """
-    Обновлённая версия, где CubTekera НЕ делает напрямую propose_block(...).
-    Вместо этого вызывает методы TransactionManager для BFT-транзакций.
-    """
+
 
     TEKERA_TO_TERABIT = 1_000_000_000_000
     GLOBAL_MAX_SUPPLY = 500_000_000  # 500 млн TEKERA
@@ -31,10 +28,7 @@ class CubTekera:
         transaction_manager=None,           # <-- теперь вместо hotstuff_consensus
         use_plain_receiver_balance: bool = False
     ):
-        """
-        hotstuff_consensus убрали. 
-        Вместо этого принимаем transaction_manager (или None).
-        """
+        
         self.key_manager = key_manager
         self.node_id = node_id
         self.chord_node = chord_node
@@ -44,7 +38,7 @@ class CubTekera:
         self.address = node_id 
        
 
-        # 2) AES-ключ для локального баланса (зашифрованный)
+       
         self.aes_key = self.key_manager.get_aes_key(node_id)
         self.aesgcm = AESGCM(self.aes_key) if self.aes_key else None
 
@@ -126,10 +120,7 @@ class CubTekera:
         return await self._load_balance()
 
     async def load_balance_of(self, address: str) -> int:
-        """
-        Возвращаем баланс другого адреса (в режиме plain, если use_plain_receiver_balance=True),
-        иначе 0 (fallback).
-        """
+       
         if address == self.address:
             return await self._load_balance()
 
@@ -283,9 +274,7 @@ class CubTekera:
     # Stake
     # ----------------------------------------------------------------
     async def stake_dataset(self, dataset_id: str, stake_amount_terabit: int) -> bool:
-        """
-        Локально уменьшаем баланс, потом вызываем stake_for_dataset(...) в ledger.
-        """
+   
         if not self.stake_ledger:
             logging.warning("[CubTekera] stake_dataset => no stake_ledger => skip.")
             return False
@@ -302,7 +291,7 @@ class CubTekera:
         st_tekera = stake_amount_terabit / self.TEKERA_TO_TERABIT
         ok = self.stake_ledger.stake_for_dataset(dataset_id, self.node_id, st_tekera)
         if not ok:
-            # Откат
+           
             async with self._lock:
                 revert_bal = await self._load_balance()
                 revert_new = revert_bal + stake_amount_terabit
@@ -341,10 +330,7 @@ class CubTekera:
     #  BFT transfers via TransactionManager
     # ----------------------------------------------------------------
     async def propose_transfer_bft(self, amount_terabit: int, recipient_address: str):
-        """
-        Вместо прямого hotstuff_consensus.propose_block, 
-        вызываем TransactionManager (если есть).
-        """
+       
         if not self.transaction_manager:
             logging.warning("[CubTekera] propose_transfer_bft => no transaction_manager => skip.")
             return
@@ -388,14 +374,9 @@ class CubTekera:
         else:
             logging.info(f"[CubTekera] propose_stake_increase => tx_id={tx_id}")
 
-    # ----------------------------------------------------------------
-    # Метод исполнения (вызывается при DECIDE в HotStuff)
-    # ----------------------------------------------------------------
+    
     async def _commit_transfer(self, tx_data: dict):
-        """
-        HotStuff вызывает это при финализации блока, 
-        чтобы списать/зачислить локальный баланс.
-        """
+        
         sender_addr = tx_data.get("sender")
         recipient_addr = tx_data.get("recipient")
         amt = tx_data.get("amount_terabit")
