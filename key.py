@@ -16,11 +16,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 logging.basicConfig(level=logging.INFO)
 
 class KeyManager:
-    """
-    Пример KeyManager, который хранит ECDSA-ключи для узлов (node_id или addr_...),
-    умеет шифровать их в JSON-файле, а также подписывать/проверять JSON-сообщения.
-    """
-
+ 
     def __init__(
         self,
         key_dir: Optional[str] = None,
@@ -34,7 +30,7 @@ class KeyManager:
         self.salt_str = salt_str
         self.passphrase_source = passphrase_source
 
-        # Определяем, куда сохранять
+       
         if not ephemeral_mode:
             if key_dir:
                 os.makedirs(key_dir, exist_ok=True)
@@ -44,7 +40,7 @@ class KeyManager:
         else:
             self.json_file = "ephemeral_keys.json"
 
-        # Для AES‐шифрования (если нужно)
+        
         self.secret_key = None
         if self.use_encryption:
             passphrase = None
@@ -76,9 +72,7 @@ class KeyManager:
 
         logging.info(f"[KeyManager] init => ephemeral={self.ephemeral_mode}, encryption={self.use_encryption}, pass_src={self.passphrase_source}")
 
-    # ----------------------------------------------------------------
-    # LOAD/SAVE
-    # ----------------------------------------------------------------
+ 
     def _load_keys(self):
         if not os.path.isfile(self.json_file):
             logging.info(f"[KeyManager] no file => skip => {self.json_file}")
@@ -113,14 +107,9 @@ class KeyManager:
         except Exception as e:
             logging.error(f"[KeyManager] save error => {e}")
 
-    # ----------------------------------------------------------------
-    # ECDSA (генерация/хранение)
-    # ----------------------------------------------------------------
+   
     def create_ecdsa_keys(self, node_id: str):
-        """
-        Генерируем ECDSA на secp256r1, сохраняем PEM в self.keys[node_id].
-        node_id может быть 'addr_...' или любым другим строковым идентификатором.
-        """
+      
         if node_id in self.keys:
             raise ValueError(f"[KeyManager] ECDSA for {node_id} already exist.")
 
@@ -146,10 +135,7 @@ class KeyManager:
         logging.info(f"[KeyManager] create ECDSA => node={node_id}")
 
     def store_ec_privkey(self, node_id: str, priv_key: ec.EllipticCurvePrivateKey):
-        """
-        Если уже есть готовый приватный ключ (priv_key),
-        можно сохранить его в KeyManager (перезапись).
-        """
+    
         private_pem = priv_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.PKCS8,
@@ -200,9 +186,7 @@ class KeyManager:
             logging.error(f"[KeyManager] get_ec_pubkey => {e}")
             return None
 
-    # ----------------------------------------------------------------
-    # Подпись/проверка транзакций
-    # ----------------------------------------------------------------
+    
     def sign_transaction(self, node_id: str, data_obj: dict) -> str:
         """
         Подписываем (ECDSA) словарь data_obj (json.dumps sort_keys=True) 
@@ -221,7 +205,7 @@ class KeyManager:
         """
         return self._verify_message_internal(node_id, data_obj, sig_hex)
 
-    # Для совместимости, если где-то осталось "verify_message(...)"
+    
     def verify_message(self, node_id: str, data_obj: dict, sig_hex: str)->bool:
         return self._verify_message_internal(node_id, data_obj, sig_hex)
 
@@ -241,9 +225,7 @@ class KeyManager:
             logging.error(f"[KeyManager] verify => {e}")
             return False
 
-    # ----------------------------------------------------------------
-    # AES (для шифрования файла keys.json)
-    # ----------------------------------------------------------------
+   
     def create_aes_key(self, node_id:str):
         if node_id not in self.keys:
             raise ValueError(f"[KeyManager] node_id={node_id} not found => ECDSA first.")
@@ -263,9 +245,7 @@ class KeyManager:
             return None
         return bytes.fromhex(hx)
 
-    # ----------------------------------------------------------------
-    # (Optional) MW key
-    # ----------------------------------------------------------------
+   
     def create_mw_key(self, node_id:str):
         if node_id not in self.keys:
             raise ValueError(f"[KeyManager] node={node_id} not found => ECDSA first.")
@@ -285,9 +265,7 @@ class KeyManager:
             return None
         return bytes.fromhex(hx)
 
-    # ----------------------------------------------------------------
-    # AES-256-GCM внутренних данных
-    # ----------------------------------------------------------------
+    
     def _aes_encrypt(self, plain: bytes)->bytes:
         if not self.secret_key:
             return plain
