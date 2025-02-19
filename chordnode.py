@@ -74,7 +74,7 @@ class ChordNode:
         self.data_file = data_file or f"chord_{my_address}.json"
         self._data_lock = asyncio.Lock()
 
-        # Связь с NodeNetwork (по умолчанию None, пока не вызовем set_network)
+       
         self.network = None
         self._bg_task: Optional[asyncio.Task] = None
         self._stop_bg = False
@@ -168,17 +168,17 @@ class ChordNode:
         if hkey in self._fs_cache:
             (sid,sh,exp) = self._fs_cache[hkey]
             if now < exp:
-                # Доп. проверка, не попадает ли hkey в нашу зону (my_hash => successors[0].hash)
+              
                 if self._in_range(hkey, self.my_hash, self.successors[0][1], inclusive=True):
                     return self.successors[0]
                 return (sid, sh)
 
-        # Проверяем, лежит ли hkey между нами и нашим successor
+       
         if self._in_range(hkey, self.my_hash, self.successors[0][1], inclusive=True):
             self._update_cache(hkey, self.successors[0])
             return self.successors[0]
 
-        # closest_preceding_finger
+       
         cf = self.closest_preceding_finger(hkey)
         if cf[0] == self.my_address:
             self._update_cache(hkey, self.successors[0])
