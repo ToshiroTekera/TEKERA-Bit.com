@@ -2,7 +2,7 @@ import uuid
 import asyncio
 import logging
 from typing import Optional, Dict, Set
-
+ import json
 from key import KeyManager
 from trans import Transaction
 from tekeracub import CubTekera
@@ -11,14 +11,7 @@ from sealevel_engine import BaseTransaction
 logging.basicConfig(level=logging.INFO)
 
 class MultiSigTransaction:
-    """
-    Расширенный вариант мультиподписной транзакции (MST):
-      - self.transaction: Transaction
-      - self.signatures: dict{node_id -> signature_hex}
-      - authorized_signers: set of node_ids (кто может подписывать)
-      - required_signatures: сколько нужно для 'execute'
-    """
-
+   
     def __init__(
         self,
         key_manager: KeyManager,
@@ -52,10 +45,7 @@ class MultiSigTransaction:
         logging.info(f"[MultiSigTransaction] Created => tx_id={tx_id}, from={sender_node_id}, to={recipient_node_id}, amount={amount_terabit}, required={self.required_signatures}")
 
     def add_signature(self, node_id: str):
-        """
-        Подпись ECDSA ключом node_id (из key_manager), если node_id в authorized_signers.
-        Возвращаем True, если достигли required_signatures.
-        """
+       
         if not self.transaction:
             raise ValueError("[MultiSigTransaction] No .transaction to sign.")
         if node_id not in self.authorized_signers:
@@ -71,9 +61,7 @@ class MultiSigTransaction:
         return (len(self.signatures) >= self.required_signatures)
 
     def is_valid(self) -> bool:
-        """
-        Проверяем, что есть минимум required_signatures, все подписи валидны.
-        """
+      
         if not self.transaction:
             logging.warning("[MultiSigTransaction] no transaction => invalid.")
             return False
@@ -94,9 +82,7 @@ class MultiSigTransaction:
         return True
 
     def to_dict(self) -> dict:
-        """
-        Сериализация для включения в block_data={"multiSigTx": ...}
-        """
+       
         if not self.transaction:
             raise ValueError("[MultiSigTransaction] no transaction => can't to_dict.")
         return {
@@ -126,13 +112,8 @@ class MultiSigTransaction:
         return mst
 
     async def propose_bft(self, bft_consensus, cub: CubTekera):
-        """
-        Если is_valid => создаём block_data={"multiSigTx": self.to_dict()}
-        и вызываем bft_consensus.propose_block(block_data).
-        После DECIDE блок - MultiLeaderHotStuffAdvanced._apply_block(...),
-        где вызываем commit_multi_sig(...)
-        """
-        import json
+      
+       
 
         if not bft_consensus:
             logging.warning("[MultiSigTransaction] no bft_consensus => can't propose.")
@@ -146,33 +127,25 @@ class MultiSigTransaction:
         await bft_consensus.propose_block(block_data)
 
     async def execute(self, cub: CubTekera):
-        """
-        Локальное исполнение: списать у sender, зачислить recipient.
-        (До BFT это делать не нужно!)
-        """
+       
         if not self.is_valid():
             raise ValueError("[MultiSigTransaction] not enough or invalid sig => can't execute.")
         if not self.transaction:
             raise ValueError("[MultiSigTransaction] no transaction => can't execute.")
         amt = self.transaction.amount_terabit
         rec = self.transaction.recipient
-        # Локально - небезопасно, но при BFT commit это должно вызываться
+       
         new_bal, sig_hex = await cub.transfer_terabit(amt, rec)
         logging.info(f"[MultiSigTransaction] execute => done => newBal={new_bal}, tx_id={self.transaction.tx_id}")
         return (new_bal, sig_hex)
 
     @staticmethod
     async def commit_multi_sig(tx_data: dict, cub: CubTekera):
-        """
-        Вызывается, когда HotStuff-блок COMMIT->DECIDE: block_data["multiSigTx"] = tx_data
-        - восстанавливаем MST,
-        - проверяем .is_valid(),
-        - вызываем mst.execute(cub).
-        """
+       
         from multi_sig_transaction import MultiSigTransaction
         from trans import Transaction
 
-        # Восстановим из dict
+        
         mst = MultiSigTransaction.from_dict(tx_data, cub.key_manager)
         if not mst.is_valid():
             logging.warning("[MultiSigTransaction] commit => invalid => skip.")
@@ -183,9 +156,7 @@ class MultiSigTransaction:
 
 
 class MultiSigTxAdapter(BaseTransaction):
-    """
-    Если хотите интегрировать multi-sig в SealevelEngine
-    """
+   
     def __init__(self, mst: MultiSigTransaction):
         if not mst.transaction:
             raise ValueError("No .transaction in MultiSigTransaction")
