@@ -45,30 +45,30 @@ class MLTrainer:
         task_manager=None,
         cubic_matrix=None
     ):
-        # Параметры
+       
         self.learning_rate = learning_rate
         self.epochs = epochs
         self.model_file = model_file
         self.use_encryption = use_encryption and (not ephemeral_mode)
         self.ephemeral_mode = ephemeral_mode
 
-        # Дополнительные ссылки (необязательно)
+        
         self.task_manager = task_manager
         self.cubic_matrix = cubic_matrix
 
-        # Модель + лок для async тренировок
+        
         self.model: Optional[tf.keras.Model] = None
         self._ml_lock = asyncio.Lock()
 
-        # AES-ключ (если passphrase задан)
+        
         self.secret_key: Optional[bytes] = None
         if passphrase and self.use_encryption:
             self.secret_key = self._derive_key_from_passphrase(passphrase, salt="MLTrainerSalt")
 
-        # Логи обучения
+        
         self._training_logs: Dict[str, List[Dict[str, float]]] = {}
 
-        # Реальные данные (если есть)
+        
         self.real_X: Optional[np.ndarray] = None
         self.real_y: Optional[np.ndarray] = None
 
@@ -77,14 +77,9 @@ class MLTrainer:
         if not self.ephemeral_mode:
             self._load_model_weights()
 
-    # ----------------------------------------------------------------
-    # 1) Загрузка реального датасета
-    # ----------------------------------------------------------------
+ 
     def load_real_dataset(self, X: np.ndarray, y: np.ndarray):
-        """
-        Сохраняем реальный датасет в self.real_X, self.real_y.
-        Предполагаем X,y формы [N, ...].
-        """
+      
         if len(X) != len(y):
             logging.error("[MLTrainer] load_real_dataset => mismatch len(X), len(y)")
             return
@@ -92,14 +87,9 @@ class MLTrainer:
         self.real_y = y
         logging.info(f"[MLTrainer] load_real_dataset => loaded real data => samples={len(X)}")
 
-    # ----------------------------------------------------------------
-    # 2) Генерация модели
-    # ----------------------------------------------------------------
+ 
     def build_neural_network(self, input_dim: int, layers: list) -> tf.keras.Model:
-        """
-        Простая keras-сеть для classification:
-         - layers: [(size, activation), ...].
-        """
+       
         model = tf.keras.Sequential()
         model.add(tf.keras.layers.InputLayer(shape=(input_dim,)))
         for (size, activation) in layers:
@@ -110,9 +100,6 @@ class MLTrainer:
         model.compile(optimizer=opt, loss=loss_fn, metrics=['accuracy'])
         return model
 
-    # ----------------------------------------------------------------
-    # 3) Синхронная тренировка (блокирующая)
-    # ----------------------------------------------------------------
     def train(
         self,
         X: np.ndarray,
@@ -123,18 +110,14 @@ class MLTrainer:
         batch_size: int = 32,
         visualize: bool = False
     ):
-        """
-        Полная (блокирующая) тренировка, без partial.
-        """
+     
         self.model = self.build_neural_network(input_dim, layers)
         history = self.model.fit(X, y, epochs=epochs, batch_size=batch_size, verbose=1)
         if visualize:
             self._plot_training(history)
         return history
 
-    # ----------------------------------------------------------------
-    # 4) Асинхронная partial-тренировка (исп. в MiningModule)
-    # ----------------------------------------------------------------
+
     async def train_partial(
         self,
         X: np.ndarray,
@@ -144,17 +127,14 @@ class MLTrainer:
         initial_state: Optional[list] = None,
         task_id: Optional[str] = None
     ) -> Dict[str, Any]:
-        """
-        Делает N эпох .fit(...) c возможно предустановленными весами (initial_state).
-        Возвращает {"state", "accuracy", "loss", "epochs_trained"}
-        """
+    
         async with self._ml_lock:
-            # Если модели нет — создаём дефолт:
+           
             if not self.model:
                 default_layers = [(64,'relu'), (10,'softmax')]
                 self.model = self.build_neural_network(X.shape[1], default_layers)
 
-            # Если есть начальные веса:
+            
             if initial_state is not None:
                 self._set_flat_weights(self.model, initial_state)
 
@@ -171,7 +151,7 @@ class MLTrainer:
                     ep_loss = float(hist.history['loss'][ep_i])
                     self._training_logs[task_id].append({"epoch": ep_i+1, "acc": ep_acc, "loss": ep_loss})
 
-            # Сохраняем веса + возвращаем flatten
+            
             wlist = [w.flatten().tolist() for w in self.model.get_weights()]
             await self._save_model_weights()
 
@@ -206,9 +186,7 @@ class MLTrainer:
         node_id: str = "",
         partial_mode: bool = True
     ) -> Any:
-        """
-        Если хотим напрямую решать задачу (без MiningModule).
-        """
+        
         ttype = task.task_type
         if ttype != "classification":
             logging.error(f"[MLTrainer] solve_task => only classification. Got {ttype}")
@@ -242,9 +220,7 @@ class MLTrainer:
             logging.error(f"[MLTrainer] solve_task => error => {e}")
             return None
 
-    # ----------------------------------------------------------------
-    # 6) Метод для реального "shard"
-    # ----------------------------------------------------------------
+    
     def generate_classification_data_shard(self, shard_index: int = 0, shard_size: int = 300) -> dict:
       
         if self.real_X is None or self.real_y is None:
@@ -272,9 +248,7 @@ class MLTrainer:
             "y_val":   y_val
         }
 
-    # ----------------------------------------------------------------
-    # 7) Старый "generate_classification_data" (fallback)
-    # ----------------------------------------------------------------
+   
     def generate_classification_data(
         self,
         seed: int = 0,
@@ -287,7 +261,7 @@ class MLTrainer:
         Fallback: генерируем random, если нет self.real_X.
         """
         if self.real_X is not None and self.real_y is not None:
-            # можно игнорировать, но оставим предупреждение:
+           
             logging.warning("[MLTrainer] fallback random data, though real dataset is present? Check usage.")
         np.random.seed(seed)
         X = np.random.randn(num_samples, input_dim)
@@ -302,13 +276,8 @@ class MLTrainer:
             "y_val":   y_val
         }
 
-    # ----------------------------------------------------------------
-    # 8) (Опционально) verify solution
-    # ----------------------------------------------------------------
     def verify_classification_solution(self, data_dict, weights) -> bool:
-        """
-        Прогнать val-set, вернуть True если acc>= target_acc
-        """
+     
         X_val = data_dict["X_val"]
         y_val = data_dict["y_val"]
         target_acc = data_dict.get("target_acc", 0.8)
@@ -320,13 +289,9 @@ class MLTrainer:
         logging.info(f"[MLTrainer] verify => val_acc={acc:.3f}, need>={target_acc}")
         return (acc >= target_acc)
 
-    # ----------------------------------------------------------------
-    # 9) Сохранение/загрузка (AES)
-    # ----------------------------------------------------------------
+
     async def _save_model_weights(self):
-        """
-        Сохраняем model weights (JSON) c optional AES.
-        """
+      
         if self.ephemeral_mode or not self.model:
             return
         try:
@@ -392,9 +357,7 @@ class MLTrainer:
     # 10) Helpers
     # ----------------------------------------------------------------
     def _set_flat_weights(self, model: tf.keras.Model, flatted_weights: list):
-        """
-        Список flattened массивов -> set_weights
-        """
+       
         original = model.get_weights()
         new_w = []
         idx = 0
