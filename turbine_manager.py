@@ -40,7 +40,7 @@ class TurbineManager:
         self._flows_lock = asyncio.Lock()
         self._compression_executor = ThreadPoolExecutor(max_workers=2)
 
-    # Ваши оригинальные методы
+   
     def start(self):
         if self._bg_task and not self._bg_task.done():
             return
@@ -139,7 +139,7 @@ class TurbineManager:
             for d in to_delete:
                 del self._flows[d]
 
-    # Модифицированные методы с улучшениями
+    
     async def _compress_async(self, data: bytes) -> bytes:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(
@@ -175,7 +175,7 @@ class TurbineManager:
         except Exception as e:
             logger.error(f"Callback error: {e}")
 
-    # Остальные методы сохранены с минимальными изменениями
+    
     async def start_broadcast_data(self, flow_id: str, data_bytes: bytes, all_peers: List[str], fanout: int = 3):
         real_peers = [p for p in all_peers if p != self.node_id]
         if not real_peers:
