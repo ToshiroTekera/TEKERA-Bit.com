@@ -53,16 +53,16 @@ class TransactionManager:
 
         self.transactions: Dict[str, Transaction] = {}
 
-        # Ключ для AES-шифрования, если нужно
+       
         self.secret_key: Optional[bytes] = None
         if passphrase and self.use_encryption:
             self.secret_key = self._derive_key_from_passphrase(passphrase)
 
-        # 1) Создаём logger сразу
+        
         self.logger = logging.getLogger(f"TransactionManager-{node_id}")
         self.logger.info(f"[TransactionManager] node={node_id}, ephemeral={self.ephemeral_mode}, encryption={self.use_encryption}")
 
-        # 2) Если не ephemeral => загружаем транзакции
+   
         if not self.ephemeral_mode:
             self._load_transactions()
 
@@ -115,7 +115,7 @@ class TransactionManager:
             f"[TransactionManager] propose_bft_transfer => tx_id={tx.tx_id}, from={sender_address}, to={recipient_id}, amt={amount_terabit}"
         )
 
-        # 8) Если есть ProofOfHistory, записываем событие
+        
         if self.poh:
             ev = {
                 "type": "bft_transfer_propose",
@@ -127,7 +127,7 @@ class TransactionManager:
             }
             await self.poh.record_event(ev)
 
-        # 9) Возвращаем tx_id
+        
         return tx.tx_id
 
     def get_unconfirmed_txs(self, limit: int = 10) -> List[dict]:
@@ -227,7 +227,7 @@ class TransactionManager:
             amount_terabit=reward_terabit,
             currency="TEKERA"
         )
-        tx.signature = None  # coinbase не подписывает
+        tx.signature = None  
 
         self.transactions[tx.tx_id] = tx
         self._save_transactions()
@@ -475,5 +475,4 @@ class TxAdapter(BaseTransaction):
         cub = global_state["__cub_tekera__"]
 
         logging.info(f"[TxAdapter] execute => tx_id={self.raw_tx.tx_id}, from={sender}, to={recipient}, amt={amt}")
-        # Если нужно, здесь можно вызвать cub._commit_transfer(...) 
-        # Либо в HotStuff это делается при DECIDE.
+        
