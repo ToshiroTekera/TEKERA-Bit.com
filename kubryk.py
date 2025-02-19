@@ -54,7 +54,7 @@ class KubrykWallet:
         else:
             self.secret_key = None
 
-        # Локальное хранилище
+       
         # {
         #   "subwallets": {
         #       "main": {"balance":..., "mw_outputs":[...]},
@@ -87,9 +87,7 @@ class KubrykWallet:
         )
 
     async def initialize(self):
-        """
-        Проверяем/создаём ключи (ECDSA, MW) и обновляем баланс (subwallet=main).
-        """
+      
         await self._ensure_keys_created()
         main_bal = await self._fetch_remote_balance()
         async with self._wallet_lock:
@@ -98,9 +96,7 @@ class KubrykWallet:
         self.logger.info(f"[KubrykWallet] address={self.my_address} init => main_balance={main_bal} terabit")
 
     async def _ensure_keys_created(self):
-        """
-        Если в key_manager нет записи для my_address => генерируем ECDSA, MW.
-        """
+    
         async with self._wallet_lock:
             if self.my_address not in self.key_manager.keys:
                 self.logger.info(f"[KubrykWallet] Creating ECDSA => {self.my_address}")
@@ -115,9 +111,7 @@ class KubrykWallet:
             else:
                 self.logger.info(f"[KubrykWallet] MW key => found => {self.my_address}")
 
-    # ----------------------------------------------------------------
-    # subwallet
-    # ----------------------------------------------------------------
+  
     def subwallet_names(self)->List[str]:
         return sorted(list(self.local_data["subwallets"].keys()))
 
@@ -136,9 +130,7 @@ class KubrykWallet:
             return sw["balance"]
 
     async def update_subwallet_balance_from_remote(self, subname:str="main"):
-        """
-        Для примера — тянем общий баланс из CubTekera.get_total_terabit().
-        """
+    
         if subname != "main":
             self.logger.warning(
                 f"[KubrykWallet] update_subwallet_balance_from_remote => sub={subname} => ignoring => only main sync."
@@ -152,9 +144,7 @@ class KubrykWallet:
             f"[KubrykWallet] subwallet={subname} => updated from remote => {remote_bal}"
         )
 
-    # ----------------------------------------------------------------
-    # callback для наград (mining_module)
-    # ----------------------------------------------------------------
+
     def on_mining_reward(self, amount: int, from_module: str):
         self.logger.info(f"[KubrykWallet] => got reward={amount} from {from_module}")
         asyncio.create_task(self._handle_mining_reward(amount))
@@ -165,9 +155,7 @@ class KubrykWallet:
             await self._add_history(f"mining_reward => +{amount}")
             await self._save_local_data()
 
-    # ----------------------------------------------------------------
-    # Single-sig TEKERA
-    # ----------------------------------------------------------------
+ 
     async def send_coins(
         self,
         recipient_address: str,
