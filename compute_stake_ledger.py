@@ -34,9 +34,7 @@ class StakeTransaction:
 
     @staticmethod
     def from_dict(d: dict) -> "StakeTransaction":
-        """
-        Обратно: считаем, что d["target_node"] = owner_address
-        """
+       
         return StakeTransaction(
             tx_id=d["tx_id"],
             owner_address=d["target_node"],
@@ -52,10 +50,10 @@ class StakeTxAdapter(BaseTransaction):
         super().__init__(stx.tx_id)
         self.stx = stx
         self.ledger = ledger
-        # Для Sealevel нужно указать, какие ключи затрагивает транзакция:
-        # Храним stake в "stake_{owner_address}" => 
-        # но в БД это column node_id, 
-        # значит, lock "stake_{stx.owner_address}" => логика Sealevel.
+       
+       
+       
+        
         self.write_keys.add(f"stake_{stx.owner_address}")
 
     async def execute(self, global_state: dict):
@@ -124,10 +122,7 @@ class ComputeStakeLedger:
         conn.close()
   
     def get_stake(self, owner_address: str) -> float:
-        """
-        Возвращает общий стейк (stake_balance[node_id]) => 
-        но node_id = owner_address в новой логике.
-        """
+       
         conn = sqlite3.connect(self.local_db_path)
         c = conn.cursor()
         c.execute("SELECT stake_value FROM stake_balance WHERE node_id=?", (owner_address,))
@@ -163,10 +158,7 @@ class ComputeStakeLedger:
 
    
     def stake_for_dataset(self, dataset_id: str, owner_address: str, amount: float) -> bool:
-        """
-        Увеличить стейк owner_address на amount, 
-        + учесть в dataset_stakes (dataset_id, owner=owner_address).
-        """
+      
         if amount <= 0:
             logging.warning("[ComputeStakeLedger] stake_for_dataset => amount<=0 => skip")
             return False
@@ -174,7 +166,7 @@ class ComputeStakeLedger:
         conn = sqlite3.connect(self.local_db_path)
         c = conn.cursor()
 
-        # (A) общий stake_balance
+        
         old_val = self.get_stake(owner_address)
         new_val = old_val + amount
 
@@ -225,9 +217,7 @@ class ComputeStakeLedger:
         return 0.0
 
     def unstake_dataset_amount(self, dataset_id: str, owner_address: str, amount: float) -> bool:
-        """
-        Уменьшаем dataset_stakes, stake_balance на amount (если хватает).
-        """
+      
         if amount <= 0:
             logging.warning("[ComputeStakeLedger] unstake_dataset_amount => amount<=0 => skip.")
             return False
@@ -235,7 +225,7 @@ class ComputeStakeLedger:
         conn = sqlite3.connect(self.local_db_path)
         c = conn.cursor()
 
-        # загрузить dataset_stakes
+       
         c.execute("""
           SELECT staked_amount
           FROM dataset_stakes
@@ -255,8 +245,8 @@ class ComputeStakeLedger:
 
         new_ds_val = ds_val - amount
 
-        # (A) уменьшить общий stake_balance
-        old_bal = self.get_stake(owner_address)
+        
+       old_bal = self.get_stake(owner_address)
         new_bal = old_bal - amount
         if new_bal < 0:
             new_bal = 0
@@ -266,7 +256,7 @@ class ComputeStakeLedger:
           VALUES(?,?)
         """, (owner_address, new_bal))
 
-        # (B) dataset_stakes => удалить/обновить
+        
         if new_ds_val <= 0:
             c.execute("""
               DELETE FROM dataset_stakes
@@ -286,9 +276,7 @@ class ComputeStakeLedger:
         return True
 
     def slash_dataset_stake(self, dataset_id: str) -> bool:
-        """
-        Сжигаем стейк, связанный с dataset_id (для первого owner?).
-        """
+      
         conn = sqlite3.connect(self.local_db_path)
         c = conn.cursor()
 
@@ -333,9 +321,7 @@ class ComputeStakeLedger:
         return True
 
     def slash_stake(self, owner_address: str):
-        """
-        Полный сжигание стейка owner_address => stake_balance=0, dataset_stakes=0.
-        """
+      
         old_val = self.get_stake(owner_address)
         if old_val > 0:
             conn = sqlite3.connect(self.local_db_path)
@@ -364,10 +350,7 @@ class ComputeStakeLedger:
         bft_consensus=None,
         signature: Optional[str] = None
     ):
-        """
-        Старый механизм: если amount>0 => повысить stake, <0 => уменьшить, 
-        без dataset_id.
-        """
+      
         if amount == 0:
             logging.warning("[ComputeStakeLedger] propose_stake_change => 0 => skip.")
             return
@@ -384,10 +367,7 @@ class ComputeStakeLedger:
             self.apply_stake_tx(stx)
 
     def apply_stake_tx(self, stx: StakeTransaction):
-        """
-        Применить (увеличить/уменьшить) stake без dataset_id.
-        Если есть key_manager, делаем batch-проверку подписи ECDSA.
-        """
+     
         if not self.key_manager:
             self._apply_stake_tx_local(stx)
         else:
@@ -397,7 +377,7 @@ class ComputeStakeLedger:
         conn = sqlite3.connect(self.local_db_path)
         c = conn.cursor()
 
-        # Проверяем, не было ли tx_id
+       
         c.execute("SELECT status FROM stake_txs WHERE tx_id=?", (stx.tx_id,))
         row = c.fetchone()
         if row:
@@ -458,10 +438,7 @@ class ComputeStakeLedger:
                 logging.warning(f"[ComputeStakeLedger] stakeTx={stx.tx_id} => FAIL sig => skip")
 
     def _ecdsa_batch_verify(self, stx_list: List[StakeTransaction]) -> List[Tuple[bool, StakeTransaction]]:
-        """
-        Пакетная проверка. 
-        stx.owner_address => ключ в KeyManager. 
-        """
+     
         out = []
         for stx in stx_list:
             if (not stx.signature) or (not self.key_manager):
@@ -516,13 +493,9 @@ class ComputeStakeLedger:
                 pass
             logging.info("[ComputeStakeLedger] stopped.")
 
-    # --------------------------------------------------------------
-    # CRDT-сохранение/загрузка
-    # --------------------------------------------------------------
+  
     async def store_ledger_in_chord(self):
-        """
-        Сохраняем в Chord => key="stake_ledger_{self.local_alias}".
-        """
+  
         if not self.chord_node:
             logging.warning("[ComputeStakeLedger] no chord_node => skip store_ledger.")
             return
@@ -574,7 +547,7 @@ class ComputeStakeLedger:
         conn = sqlite3.connect(self.local_db_path)
         c = conn.cursor()
 
-        # чистим
+       
         c.execute("DELETE FROM stake_balance")
         c.execute("DELETE FROM stake_txs")
         c.execute("DELETE FROM dataset_stakes")
@@ -583,7 +556,7 @@ class ComputeStakeLedger:
         for addr, stval in st_map.items():
             c.execute("INSERT INTO stake_balance(node_id, stake_value) VALUES(?,?)", (addr, float(stval)))
 
-        # stake_txs
+        
         for txd in tx_list:
             stx = StakeTransaction.from_dict(txd)
             c.execute("""
@@ -591,7 +564,7 @@ class ComputeStakeLedger:
               VALUES(?,?,?,?,?)
             """, (stx.tx_id, stx.owner_address, stx.amount, stx.timestamp, stx.signature))
 
-        # dataset_stakes
+       
         if ds_stakes and isinstance(ds_stakes, list):
             for ds_item in ds_stakes:
                 ds_id = ds_item["dataset_id"]
