@@ -27,9 +27,7 @@ def hmac_sha256(key: bytes, data: bytes) -> bytes:
     import hmac, hashlib
     return hmac.new(key, data, hashlib.sha256).digest()
 
-# ----------------------------------------------------------------
-# Структуры
-# ----------------------------------------------------------------
+
 class SenderChunk:
     def __init__(self, chunk_idx: int, shares: List[bytes], K: int, M: int):
         self.chunk_idx = chunk_idx
@@ -66,19 +64,9 @@ class ReceiverFlow:
         self.start_ts = time.time()
         self.last_nack_ts = 0.0   # когда последний раз слали NACK
 
-# ----------------------------------------------------------------
-# Улучшенный FecChannel
-# ----------------------------------------------------------------
+
 class FecChannel:
-    """
-    Класс для передачи больших файлов поверх RTCDataChannel с помощью
-    zfec (FEC-кодирование), частичного NACK, опционального lz4-сжатия
-    и ряда production-like улучшений:
-      - Adaptive FEC (при send_file можно авто-определить K,M),
-      - Flow Control (лимит на &laquo;байты в полёте&raquo;),
-      - Защита от NACK-флуда,
-      - Очистка старых потоков.
-    """
+ 
 
     ACK_INTERVAL = 2.0           # как часто проверять receiver flows
     FLOW_TIMEOUT = 120.0         # через сколько секунд удалить (receiver) flow, если не собран
@@ -143,18 +131,12 @@ class FecChannel:
     # BG loop
     # ---------------------------------------------------------------
     def stop(self):
-        """
-        Остановка фоновой задачи (например, при закрытии соединения).
-        """
+ 
         if self._bg_task and not self._bg_task.done():
             self._bg_task.cancel()
 
     async def _bg_loop(self):
-        """
-        Фоновая корутина:
-          1) Периодически проверяет ReceiverFlow => если не собран, отправляем NACK (упрощённый вариант)
-          2) Удаляем старые / неактивные потоки
-        """
+       
         try:
             while True:
                 await asyncio.sleep(self.ack_interval)
@@ -169,9 +151,7 @@ class FecChannel:
                                 logger.debug(f"[FecChannel] remove old receiver flow={fid.hex()}")
                             continue
 
-                        # Псевдо-логика автосоздания NACK
-                        # (Если нужно более тонко, можно проверять, что "missing" > 0, 
-                        #  и (now-rf.last_nack_ts)>X)
+                      
                         missing_any = False
                         for cidx in range(rf.chunk_count):
                             if not rf.chunk_done[cidx]:
@@ -197,16 +177,9 @@ class FecChannel:
         except Exception as e:
             logger.error(f"[FecChannel] _bg_loop => error => {e}")
 
-    # ---------------------------------------------------------------
-    # Adaptive FEC
-    # ---------------------------------------------------------------
+
     def _choose_fec_params(self, data_len: int) -> (int,int):
-        """
-        Простейшая схема:
-         - <10MB => (8,2)
-         - <100MB => (16,4)
-         - иначе => (32,6)
-        """
+      
         if data_len < 10_000_000:
             return (8,2)
         elif data_len < 100_000_000:
@@ -214,25 +187,19 @@ class FecChannel:
         else:
             return (32,6)
 
-    # ---------------------------------------------------------------
-    # PUBLIC: send_file
-    # ---------------------------------------------------------------
+
     def send_file(self, raw_data: bytes):
-        """
-        Генерируем flow_id, делим на чанки, FEC-кодируем, рассылаем.
-        (Без "адреса", т.к. RTCDataChannel - P2P. 
-         Но если хочется, можно "broadcast" - это уже на уровень выше).
-        """
+      
         flow_id = os.urandom(16)
 
-        # Выберем K,M если включён adaptive_fec
+       
         if self.adaptive_fec:
             K,M = self._choose_fec_params(len(raw_data))
         else:
             K,M= self.K,self.M
         N= K+M
 
-        # 1) Разбиваем на чанки
+        
         chunks=[]
         start=0
         while start< len(raw_data):
@@ -245,7 +212,7 @@ class FecChannel:
 
         sf = SenderFlow(flow_id, len(chunks))
 
-        # 2) FEC
+        
         enc = Encoder(K,N)
         for cidx, cd in enumerate(chunks):
             shares= enc.encode(cd)
@@ -256,7 +223,7 @@ class FecChannel:
             async with self._lock:
                 self.sender_flows[flow_id]= sf
 
-            # Пошагово рассылаем все shares
+            
             for cidx, sc in sf.chunks.items():
                 for share_idx, shard_data in enumerate(sc.shares):
                     await self._send_one_share(sf, cidx, share_idx, shard_data)
@@ -292,9 +259,7 @@ class FecChannel:
         finally:
             self._flow_sem.release()
 
-    # ---------------------------------------------------------------
-    # NACK
-    # ---------------------------------------------------------------
+   
     def _send_nack(self, flow_id: bytes, chunk_idx: int, missing_idx: List[int]):
         """
         NACK => [TYPE_NACK] + flow_id(16) + chunk_idx(2) + missing_count(2) + each missing(2) + [hmac?]
@@ -325,8 +290,7 @@ class FecChannel:
 
         sc.resend_count[share_idx]+=1
         shard_data= sc.shares[share_idx]
-        # заново формируем packet
-        # ...
+      
         header= bytearray([TYPE_DATA])
         header+= sf.flow_id
         header+= chunk_idx.to_bytes(2,'big')
