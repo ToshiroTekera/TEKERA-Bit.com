@@ -22,7 +22,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("FederatedRayTraining")
 
-# Prometheus (если нужно)
+# Prometheus 
 TRAINING_LOSS = Histogram("training_loss", "Local training loss", ["actor_id"])
 VALIDATION_ACCURACY = Histogram("validation_accuracy", "Local validation accuracy", ["actor_id"])
 AGGREGATION_TIME = Histogram("aggregation_time", "Time spent aggregating weights")
@@ -31,9 +31,7 @@ logger.info("Prometheus HTTP server started on port 8000")
 
 
 def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
-    """
-    Читает JSON-конфиг, или возвращает дефолт.
-    """
+   
     default_config = {
         "ml_config": {
             "lr": 0.01,
@@ -141,14 +139,14 @@ class MLTrainerActor:
             correct = (pred == y_t).sum().item()
             acc = correct / len(y_t)
 
-            # Сохраняем метрики Prometheus
+            
             TRAINING_LOSS.labels(actor_id=str(actor_id)).observe(loss.item())
             VALIDATION_ACCURACY.labels(actor_id=str(actor_id)).observe(acc)
 
             # **Опционально**: log partial solution
             logging.info(f"Actor {actor_id}: ep={ep+1}/{epochs_per_round}, partial_loss={loss.item():.4f}, acc={acc:.3f}")
 
-        # В конце метода, total_delta = сумма delta за каждую эпоху
+        
         new_w = get_flat_params(self.model).detach().clone()
         self.local_weights = new_w
         logging.info(f"Actor {actor_id}: local train done => final accum delta norm={total_delta.norm():.4f}")
@@ -198,10 +196,7 @@ def save_checkpoint(global_w: torch.Tensor, checkpoint_dir: str, round_i: int) -
 
 
 def federated_training_loop(config: Dict[str, Any]) -> torch.Tensor:
-    """
-    Основная функция: запускает Ray-акторы, делает несколько раундов обучения
-    (FedAvg) и возвращает итоговые (глобальные) веса.
-    """
+  
     ml_config = config["ml_config"]
     num_workers = config["num_workers"]
     num_rounds = config["num_rounds"]
@@ -211,15 +206,15 @@ def federated_training_loop(config: Dict[str, Any]) -> torch.Tensor:
     if not ray.is_initialized():
         ray.init()
 
-    # Инициализируем "пустую" модель для глоб.весов
+    
     dummy_model = SimpleMLP(ml_config["input_dim"], ml_config["output_dim"])
     global_w = get_flat_params(dummy_model).detach().clone()
 
-    # Создаём Ray-акторы
+    
     trainers = [MLTrainerActor.remote(ml_config) for _ in range(num_workers)]
     logging.info(f"Created {len(trainers)} MLTrainerActor(s)")
 
-    # Генерируем фейковые датасеты
+    
     X_shards = [np.random.randn(100, ml_config["input_dim"]) for _ in range(num_workers)]
     y_shards = [np.random.randint(0, ml_config["output_dim"], size=100) for _ in range(num_workers)]
     X_val = np.random.randn(50, ml_config["input_dim"])
@@ -239,7 +234,7 @@ def federated_training_loop(config: Dict[str, Any]) -> torch.Tensor:
             logging.error(f"[Round={r}] apply_global_weights => {e}")
             continue
 
-        # 2) Локальное обучение => получаем deltas
+        
         train_futs = []
         for i, act in enumerate(trainers):
             fut = act.train_local_batch.remote(X_shards[i], y_shards[i], epochs=1)
@@ -259,7 +254,7 @@ def federated_training_loop(config: Dict[str, Any]) -> torch.Tensor:
                 global_w += mean_d
         logging.info(f"[Round={r}] Global weights updated")
 
-        # 4) Выбираем случайного актёра => проверка
+        
         check_actor = random.choice(trainers)
         try:
             met = ray.get(check_actor.get_local_metrics.remote(X_val, y_val), timeout=timeouts.get("validation", 5))
@@ -271,7 +266,7 @@ def federated_training_loop(config: Dict[str, Any]) -> torch.Tensor:
         except Exception as e:
             logging.error(f"[Round={r}] validation => {e}")
 
-        # 5) Сохраняем чекпоинт
+        
         save_checkpoint(global_w, ckp_dir, r)
         time.sleep(0.2)
 
