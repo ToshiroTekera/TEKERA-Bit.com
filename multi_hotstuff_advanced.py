@@ -270,11 +270,11 @@ class MultiLeaderHotStuffAdvanced:
             try:
                 from compute_stake_ledger import StakeTransaction
                 stx = StakeTransaction.from_dict(stx_data)
-                # (a) Проверяем, что amount>0
+                
                 if stx.amount <= 0:
                     self.logger.warning("[Validate] StakeTx => amount<=0 => reject")
                     return False
-                # (b) Проверяем подпись, если есть key_manager
+                
                 if stx.signature and stx.target_node and self.key_manager:
                     sign_data = {
                         "tx_id": stx.tx_id,
@@ -314,7 +314,7 @@ class MultiLeaderHotStuffAdvanced:
 
        
             try:
-                # Предположим, у CubTekera есть метод load_balance_of(sender) или аналог
+                
                 bal = await self.cub_tekera.load_balance_of(sender)
             except Exception as e:
                 self.logger.warning(f"[Validate] TekeraTx => error loading balance => {e}")
@@ -324,7 +324,7 @@ class MultiLeaderHotStuffAdvanced:
                 self.logger.warning(f"[Validate] TekeraTx => insufficient: sender={sender}, have={bal}, need={amt}")
                 return False
 
-            # (b) Проверяем подпись, если не COINBASE
+            
             tx_id = tekera_data.get("tx_id")
             sign_hex = tekera_data.get("signature")
             if tx_id and sign_hex and sender != "COINBASE" and self.key_manager:
@@ -367,13 +367,13 @@ class MultiLeaderHotStuffAdvanced:
     
         reconfig_data = block_data.get("reconfig")
         if reconfig_data:
-            # Можно проверить, что add_nodes/remove_nodes корректны
+           
             pass
 
   
         ml_op = block_data.get("ml_task_op")
         if ml_op:
-            # Проверяем поля ml_op
+            
             pass
 
    
@@ -492,7 +492,7 @@ class MultiLeaderHotStuffAdvanced:
                     if c_txid and self.transaction_manager:
                         self.transaction_manager.mark_tx_confirmed(c_txid)
 
-        # --- если остался single mlRewardTx (старый формат), тоже обработаем ---
+        
         ml_reward_tx = block_data.get("mlRewardTx")
         ml_proof     = block_data.get("mlProof")
         if ml_reward_tx and ml_proof and self.cub_tekera:
@@ -504,7 +504,7 @@ class MultiLeaderHotStuffAdvanced:
                 if c_txid and self.transaction_manager:
                     self.transaction_manager.mark_tx_confirmed(c_txid)
 
-        # 6) Reconfig (если есть)
+        # 6) Reconfig 
         reconfig_data = block_data.get("reconfig")
         if reconfig_data:
             self._apply_reconfig(reconfig_data)
@@ -538,10 +538,10 @@ class MultiLeaderHotStuffAdvanced:
             else:
                 self.logger.warning(f"[MultiAdvHS] _apply_block => datasetRegistryTx => unknown action={action}")
 
-        # Все операции выполнены
+        
         self.logger.info(f"[MultiAdvHS] block={block_id} => final => done => all ops applied.")
 
-        # Увеличиваем счётчик блоков => + проверка на 46000
+        
         self.block_counter += 1
         if (self.block_counter % 46000) == 0:
             self.global_difficulty += 1
@@ -559,7 +559,7 @@ class MultiLeaderHotStuffAdvanced:
         proof_ok = await self.cub_tekera._verify_ml_proof(ml_proof)
         if not proof_ok:
             return False
-        # 3) Проверяем, не превысим ли лимит
+        
         minted_so_far = await self.cub_tekera._load_minted_total()
         if minted_so_far + amt > self.cub_tekera.max_supply_terabit:
             return False
@@ -578,7 +578,7 @@ class MultiLeaderHotStuffAdvanced:
                 if self.node_id in prop["votes"][PHASE_PREPARE]:
                     self.logger.warning(
                         f"[ProposeBlock] Уже подписан другой блок {b_id} на height={height}, status={prop['status']}."
-                        " Пропускаем повторное предложение."
+                        
                     )
                     return       
 
@@ -586,7 +586,7 @@ class MultiLeaderHotStuffAdvanced:
             self.logger.warning(f"[MultiAdvHS] Block re-propose => {block_id}")
             return
 
-        # Проверка lock
+       
         if height in self.locked_block_at_height:
             locked_bid = self.locked_block_at_height[height]
             if locked_bid != parent_id:
@@ -596,7 +596,6 @@ class MultiLeaderHotStuffAdvanced:
                 await self._start_view_change(reason="Locked conflict", forced_view=None)
                 return
 
-        # Регистрируем новую пропозицию
         self.proposals[block_id] = {
             "parent_id": parent_id,
             "height": height,
@@ -615,11 +614,11 @@ class MultiLeaderHotStuffAdvanced:
 
         await self.block_store.save_block(block_id, parent_id, height, block_data)
 
-        # Свой голос
+        
         my_stake = self._get_stake(self.node_id)
         self.proposals[block_id]["votes"][PHASE_PREPARE][self.node_id] = my_stake
 
-        # Формируем сетевое сообщение
+        
         msg = {
             "type": "hotstuff_chain_multi",
             "protocol_version": self.protocol_version,
@@ -629,21 +628,21 @@ class MultiLeaderHotStuffAdvanced:
             "view": self.current_view,
             "sender": self.node_id
         }
-        # Подписываем через NodeNetwork
+       
         sig = self.network._sign_message(msg, self.node_id)
         msg["signature"] = sig
 
-        # Для double-sign detection (локально)
+        
         self._record_sign(self.node_id, PHASE_PREPARE, height, block_id, msg, sig)
 
-        # Рассылаем
+        
         await self.network.broadcast_transaction(msg)
         self.logger.info(f"[MultiAdvHS] Propose => block={block_id}, h={height}, view={self.current_view}")
 
-        # Таймер
+        
         self._schedule_timeout(block_id)
 
-        # Проверка кворума (вдруг у нас локально большой stake)
+        
         await self._check_threshold(block_id, PHASE_PREPARE)  
    
    
@@ -662,15 +661,15 @@ class MultiLeaderHotStuffAdvanced:
         if sum_st < total * self.threshold_ratio:
             return
 
-        # --- PHASE: PREPARE -> PRECOMMIT ---
+        
         if phase == PHASE_PREPARE and prop["phase"] == PHASE_PREPARE:
-            # Проверяем блок
+            
             is_valid = await self._validate_block_data(prop["data"])
             if not is_valid:
                 self.logger.warning(f"[HotStuff] Block={block_id} invalid => skip precommit.")
                 return
 
-            # Переходим в PRECOMMIT
+            
             prop["phase"] = PHASE_PRECOMMIT
             prop["status"] = "precommit"
             await self.block_store.update_phase(block_id, PHASE_PRECOMMIT, "precommit")
@@ -679,7 +678,7 @@ class MultiLeaderHotStuffAdvanced:
             if h > self.highest_qc["height"]:
                 self.highest_qc = {"block_id": block_id, "height": h, "agg_sig": b""}
 
-            # Рассылаем PRECOMMIT
+            
             msg = {
                 "type": "hotstuff_chain_multi",
                 "phase": PHASE_PRECOMMIT,
@@ -693,9 +692,9 @@ class MultiLeaderHotStuffAdvanced:
             await self.network.broadcast_transaction(msg)
             self._schedule_timeout(block_id)
 
-        # --- PHASE: PRECOMMIT -> COMMIT ---
+        
         elif phase == PHASE_PRECOMMIT and prop["phase"] == PHASE_PRECOMMIT:
-            # Набрали кворум на PRECOMMIT => переходим в COMMIT
+            
             prop["phase"] = PHASE_COMMIT
             prop["status"] = "commit"
             await self.block_store.update_phase(block_id, PHASE_COMMIT, "commit")
@@ -705,7 +704,7 @@ class MultiLeaderHotStuffAdvanced:
             if h > self.highest_qc["height"]:
                 self.highest_qc = {"block_id": block_id, "height": h, "agg_sig": b""}
 
-            # Рассылаем COMMIT
+            
             msg = {
                 "type": "hotstuff_chain_multi",
                 "phase": PHASE_COMMIT,
@@ -719,21 +718,21 @@ class MultiLeaderHotStuffAdvanced:
             await self.network.broadcast_transaction(msg)
             self._schedule_timeout(block_id)
 
-        # --- PHASE: COMMIT -> DECIDE (final) ---
+        
         elif phase == PHASE_COMMIT and prop["phase"] == PHASE_COMMIT:
             prop["phase"] = PHASE_DECIDE
             prop["status"] = "final"
             await self.block_store.mark_final(block_id)
 
-            # Отменяем таймер, если есть
+            
             if prop["timeout_task"] and not prop["timeout_task"].done():
                 prop["timeout_task"].cancel()
 
-            # Применяем блок (execute)
+           
             await self._apply_block(block_id, prop["data"])
             self.logger.info(f"[HotStuff] block={block_id} => final => done")
 
-            # Можно вычистить из словаря
+           
             del self.proposals[block_id]         
  
 
@@ -888,26 +887,26 @@ class MultiLeaderHotStuffAdvanced:
         bdata = data.get("block_data")
         msg_view = data.get("view", 0)
 
-        # Если (msg_view < self.current_view), игнорируем старое сообщение
+       
         if msg_view < self.current_view:
             return
 
-        # Для double-sign detection
+        
         height = bdata.get("height", 0) if bdata else 0
         signature = data.get("signature", "")
         self._record_sign(sender_id, ph, height, block_id, data, signature)
 
-        # Если нет proposals[block_id], но phase=PREPARE => заведём новую пропозицию
+        
         if block_id not in self.proposals:
             if ph == PHASE_PREPARE and bdata:
-                # Проверяем lock
+               
                 if height in self.locked_block_at_height:
                     if self.locked_block_at_height[height] != bdata.get("parent_id"):
                         self.logger.warning("Lock conflict => viewchange.")
                         await self._start_view_change(reason="Locked mismatch", forced_view=None)
                         return
 
-                # Заводим новую запись
+                
                 self.proposals[block_id] = {
                     "parent_id": bdata.get("parent_id",""),
                     "height": height,
@@ -927,15 +926,15 @@ class MultiLeaderHotStuffAdvanced:
                 await self.block_store.save_block(block_id, bdata.get("parent_id",""), height, bdata)
                 self._schedule_timeout(block_id)
             else:
-                # Иначе — либо игнорируем, либо жалоба (на усмотрение)
+                
                 return
 
-        # Уже есть запись о блоке
+        
         prop = self.proposals[block_id]
         stv = self._get_stake(sender_id)
 
-        # --- Предотвращаем double-sign (для локального узла) ---
-        # Если этот sender_id == текущий узел (мы сами), проверяем, не голосовали ли уже за другой блок на height:
+      
+        
         if sender_id == self.node_id and ph in (PHASE_PREPARE, PHASE_PRECOMMIT, PHASE_COMMIT):
             old_block = self.my_votes_at_height.get(height)
             if old_block and old_block != block_id:
@@ -944,9 +943,9 @@ class MultiLeaderHotStuffAdvanced:
                     f"already voted for {old_block}"
                 )
                 return
-            # Иначе фиксируем, что мы теперь голосуем за block_id
+            
             self.my_votes_at_height[height] = block_id
-        # --------------------------------------------------------
+       
 
         if ph == PHASE_PREPARE:
             prop["votes"][PHASE_PREPARE][sender_id] = stv
@@ -1008,7 +1007,7 @@ class MultiLeaderHotStuffAdvanced:
 
 
     async def _broadcast_timeout_partial(self):
-        # Если уже есть TimeoutCertificate на текущий view, то не дублируем.
+       
         if self.timeout_certificate.get(self.current_view):
             return
 
@@ -1097,7 +1096,7 @@ class MultiLeaderHotStuffAdvanced:
             except:
                 pass
 
-        # Увеличиваем счётчик жалоб
+        
         if " from " in rsn:
             arr = rsn.split(" from ")
             if len(arr) >= 2:
@@ -1226,7 +1225,7 @@ class MultiLeaderHotStuffAdvanced:
         if len(vc_data) < (2*self.f + 1):
             return
 
-        # Собрали 2f+1 => формируем hotstuff_new_view
+        
         highest_h = -1
         highest_bid = None
         for nd, info in vc_data.items():
@@ -1247,7 +1246,7 @@ class MultiLeaderHotStuffAdvanced:
             "sender": self.node_id
         }
 
-        # При желании добавить первые 2f+1 подписей
+       
         c = 0
         for nd,inf in vc_data.items():
             if c<(2*self.f+1):
@@ -1266,7 +1265,7 @@ class MultiLeaderHotStuffAdvanced:
 
         self.view_change_in_progress = False
 
-        # Если мы лидер => предлагаем новый блок
+        
         leader = self._get_leader_for_view(view_num)
         if leader == self.node_id:
             # parent=locked_bid, height=highest_h+1
