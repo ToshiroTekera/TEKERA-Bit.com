@@ -12,7 +12,7 @@ from numpy import ndarray
 
 logging.basicConfig(level=logging.INFO)
 
-# <-- Ваши модули:
+
 from mltrainer import MLTrainer, Task
 from tranmen import TransactionManager
 from networknod import NodeNetwork
@@ -80,7 +80,7 @@ class MiningModule:
         self.dataset_registry = dataset_registry
         self.cub_tekera = cub_tekera
 
-        # Инициализируем доступ к реальным датасетам (iris и т.п.)
+       
         self.real_ds = RealDatasets()
 
         if not ephemeral_mode:
@@ -89,7 +89,7 @@ class MiningModule:
             self.logger.warning("[MiningModule] ephemeral_mode => skip load from disk.")
 
     async def start(self):
-        """Запуск MiningModule: подписываемся на входящие сообщения."""
+        
         if not self.subscribed:
             self.subscribed = True
             if hasattr(self.network, "on_message_callbacks"):
@@ -103,7 +103,7 @@ class MiningModule:
             self._save_local_data()
 
     async def run_mining_loop(self):
-        """Основной &laquo;майнинговый&raquo; цикл: периодически создаём задачу, рассылаем её, обучаем локально."""
+        
         while True:
             try:
                 # Пример: создаём задачу (датасет iris)
@@ -147,16 +147,12 @@ class MiningModule:
         shard_size: int = 300,
         dataset_id: Optional[str] = None
     ) -> Optional[Task]:
-        """
-        Создание ML-задачи. При этом мы формируем и свой &laquo;секретный тест&raquo;.
-        NOTE: У каждого узла может быть собственный X_secret_test,
-        чтобы проверять результат исполнителей.
-        """
+       
         if not dataset_id:
             self.logger.warning("[MiningModule] generate_task => no dataset_id => skip => no reward.")
             return None
 
-        # Проверка &laquo;одобрен ли датасет&raquo;
+        
         if self.dataset_registry:
             loop = asyncio.get_event_loop()
             approved = loop.run_until_complete(self.dataset_registry.is_approved(dataset_id))
@@ -169,7 +165,7 @@ class MiningModule:
             self.logger.warning("[MiningModule] generate_task => only classification logic => skip.")
             return None
 
-        # Достаём кусок реального датасета
+        
         try:
             real_data = self.real_ds.get_dataset_shard(dataset_id, shard_index, shard_size)
         except ValueError as ex:
@@ -184,7 +180,7 @@ class MiningModule:
             "target_acc": test_threshold
         }
 
-        # Формируем Task
+       
         t = Task(
             task_id=task_id,
             data=data_dict,
@@ -192,7 +188,7 @@ class MiningModule:
             difficulty=5
         )
 
-        # --- Генерируем &laquo;секретный тест&raquo; ---
+        
         X_val = data_dict["X_val"]
         y_val = data_dict["y_val"]
         n = min(20, len(y_val))
@@ -200,7 +196,7 @@ class MiningModule:
         X_test = X_val[idx]
         y_test = y_val[idx]
 
-        # NOTE: Сохраняем локально "X_test" и "y_test" — никто, кроме нас, их не видит
+        
         self.secret_tests[task_id] = {
             "X_test": X_test,
             "y_test": y_test,
@@ -213,7 +209,7 @@ class MiningModule:
         return t
 
     async def distribute_task(self, task: Task, recipients: List[str]):
-        """Рассылка задачи (ml_task) с тренировочными данными (но без секретных меток)."""
+        
         data_obj = {}
         if isinstance(task.data, dict):
             for k, v in task.data.items():
@@ -237,7 +233,7 @@ class MiningModule:
         self.logger.info(f"[MiningModule] distribute_task => {task.task_id} => recips={recipients}")
 
     def on_network_message(self, msg: dict):
-        """Метод подписки на входящие сообщения."""
+        
         mtype = msg.get("type")
         if mtype == "ml_task":
             asyncio.create_task(self._handle_incoming_task(msg))
@@ -253,7 +249,7 @@ class MiningModule:
             self.logger.debug(f"[MiningModule] unknown msg => {mtype}")
 
     async def _handle_incoming_task(self, msg: dict):
-        """Если мы получили 'ml_task' от другого узла, регистрируем и можем обучиться."""
+    
         task_id = msg.get("task_id")
         sender = msg.get("sender")
         task_data = msg.get("task_data", {})
@@ -269,7 +265,7 @@ class MiningModule:
 
         self.logger.info(f"[MiningModule] got ml_task={task_id} from sender={sender}")
 
-        # Можно сразу начать локальное обучение
+        
         await self._solve_local_task(t)
 
     async def _handle_incoming_partial(self, msg: dict):
@@ -291,7 +287,7 @@ class MiningModule:
         self.logger.info(f"[MiningModule] partial => task={task_id}, from={sender}, ep={epoch}, acc={acc}")
 
     async def _handle_incoming_solution(self, msg: dict):
-        """Получаем финальное 'ml_solution' (веса модели) от узла."""
+        
         task_id = msg.get("task_id")
         solver = msg.get("solver_node")
         result = msg.get("result")
@@ -312,7 +308,7 @@ class MiningModule:
                 "result": result
             }
 
-        # Формируем 'ml_challenge' (запрос предсказаний на секретном тесте)
+        
         cmsg = {
             "type": "ml_challenge",
             "task_id": task_id,
@@ -320,14 +316,14 @@ class MiningModule:
             "sender": self.node_id
         }
 
-        # Если у нас есть X_secret_test, прикрепим его
+        
         if task_id in self.secret_tests:
             secret_data = self.secret_tests[task_id]
             X_secret_list = secret_data["X_test"].tolist()  # numpy => list
             cmsg["X_secret_test"] = X_secret_list
             self.logger.info(f"[MiningModule] adding X_secret_test => len={len(X_secret_list)}")
         else:
-            # Иначе отправим пустой
+            
             self.logger.warning("[MiningModule] no X_secret_test => sending empty => likely no reward.")
             cmsg["X_secret_test"] = []
 
@@ -337,10 +333,7 @@ class MiningModule:
         )
 
     async def _handle_challenge(self, msg: dict):
-        """
-        Узел-исполнитель получает 'ml_challenge' и должен вернуть
-        предсказания на X_secret_test.
-        """
+       
         self.logger.info(f"[MiningModule] handle ml_challenge => {msg}")
 
         task_id = msg.get("task_id")
@@ -372,16 +365,16 @@ class MiningModule:
                 arr = np.array(X_test, dtype=np.float32)
                 predictions = self.ml_trainer.predict(model_state, arr)
             else:
-                # Пустой => нельзя предсказывать
+                
                 predictions = []
         else:
-            # Нет модели? Вернём случайный прогноз (или пустой)
+            
             if len(X_test) > 0:
                 predictions = np.random.randint(0, 3, size=len(X_test)).tolist()
             else:
                 predictions = []
 
-        # Отправим ответ
+        
         resp_msg = {
             "type": "ml_challenge_response",
             "task_id": task_id,
@@ -392,7 +385,7 @@ class MiningModule:
         await self.network.send_transaction(resp_msg, sender)
 
     async def _handle_challenge_response(self, msg: dict):
-        """Проверяем точность, и при успехе формируем награду через HotStuff блок (mlRewardTx)."""
+       
         task_id = msg.get("task_id")
         solver = msg.get("sender")
         preds = msg.get("predictions", [])
@@ -428,7 +421,7 @@ class MiningModule:
             self.logger.warning("[MiningModule] challenge => fail => no reward.")
             return
 
-        # Проверяем, действительно ли solver тот, кто прислал solution
+        
         async with self._lock:
             sol_data = self.pending_solutions.get(task_id)
             if (not sol_data) or (sol_data["solver"] != solver):
@@ -438,9 +431,9 @@ class MiningModule:
 
         self.logger.info(f"[MiningModule] challenge => solver={solver} => success! acc={acc:.3f}")
 
-        # -- Попытка выдать награду через HotStuff‐блок (mlRewardTx) --
+        
         if self.hotstuff:
-            # Узнаём текущий "highest QC"
+            
             parent_bid = self.hotstuff.highest_qc.get("block_id") or "GENESIS"
             parent_h   = self.hotstuff.highest_qc.get("height", 0)
             new_h = parent_h + 1
@@ -457,7 +450,7 @@ class MiningModule:
                     "amount_terabit": self.jackpot_terabit,
                     "tx_id":         reward_tx_id
                 },
-                # Доп. инфа о задаче:
+                
                 "mlProof": {
                     "task_id":  task_id,
                     "accuracy": acc,
@@ -473,12 +466,12 @@ class MiningModule:
                 self.logger.error(f"[MiningModule] propose_block error => {e}, fallback => _give_jackpot.")
                 await self._give_jackpot(task_id, solver)
         else:
-            # Нет hotstuff => fallback на старый метод
+            
             self.logger.info("[MiningModule] no hotstuff => fallback => direct _give_jackpot.")
             await self._give_jackpot(task_id, solver)
 
-        # При желании, можно тут же распределить partial-награды (или внутри HotStuff-блока)
-        # await self._distribute_partial(task_id)   
+        
+           await self._distribute_partial(task_id)   
 
     def _build_task_from_dict(self, task_id: str, data_dict: dict) -> Task:
         
@@ -504,7 +497,7 @@ class MiningModule:
             await self._do_train_multistep(t)
 
     async def _do_train_multistep(self, t: Task):
-        """Разбиваем тренировку на partial_steps и шлём 'ml_partial_solution'."""
+        
         if t.task_type != "classification":
             self.logger.warning(f"[MiningModule] only classification => skip => {t.task_id}")
             return
@@ -531,7 +524,7 @@ class MiningModule:
                 self.logger.info(
                     f"[MiningModule] partial => step={step_i}/{self.partial_steps}, acc={acc:.3f}, loss={lo:.3f}"
                 )
-                # Оповестим сеть
+                
                 pmsg = {
                     "type": "ml_partial_solution",
                     "task_id": t.task_id,
@@ -545,7 +538,7 @@ class MiningModule:
                 self.logger.error(f"[MiningModule] do_train_multistep => {e}")
                 return
 
-        # Финальное решение
+        
         final_msg = {
             "type": "ml_solution",
             "task_id": t.task_id,
@@ -558,15 +551,12 @@ class MiningModule:
         )
 
     async def _give_jackpot(self, task_id: str, solver: str):
-        """
-        Награждаем победителя, если он прошёл challenge.
-        Плюс далее распределяем partial reward (за partial solutions).
-        """
+       
         tinfo = self.active_tasks.get(task_id)
         if not tinfo:
             return
 
-        # Стараемся через CubTekera (BFT-транзакция)
+       
         if self.cub_tekera:
             try:
                 await self.cub_tekera.propose_transfer_bft(self.jackpot_terabit, solver)
@@ -590,11 +580,11 @@ class MiningModule:
             # fallback
             await self._fallback_txmgr_jackpot(task_id, solver)
 
-        # Затем partial-награды
+        #
         await self._distribute_partial(task_id)
 
     async def _fallback_txmgr_jackpot(self, task_id: str, solver: str):
-        """Альтернативный способ награды через TransactionManager."""
+        
         try:
             txid = await self.tx_manager.propose_ml_reward(
                 solver_id=solver,
@@ -682,7 +672,7 @@ class MiningModule:
         del self.task_shares[task_id]  
    
     async def store_mining_data_in_chord(self):
-        """Сохраняем часть данных в Chord (при необходимости)."""
+        
         if not self.chord_node:
             self.logger.warning("[MiningModule] no chord => skip store.")
             return
@@ -705,7 +695,7 @@ class MiningModule:
         self.logger.info(f"[MiningModule] store_mining_data_in_chord => {key}")
 
     async def load_mining_data_from_chord(self):
-        """Загрузка из Chord."""
+        
         if not self.chord_node:
             self.logger.warning("[MiningModule] no chord => skip.")
             return
@@ -743,7 +733,7 @@ class MiningModule:
         self.logger.info("[MiningModule] load_mining_data_from_chord => done")
 
     async def delete_mining_data_in_chord(self):
-        """Удаляем (помечаем tombstone)."""
+        
         if not self.chord_node:
             self.logger.warning("[MiningModule] no chord => skip delete.")
             return
@@ -755,7 +745,7 @@ class MiningModule:
         self.logger.info(f"[MiningModule] delete_mining_data_in_chord => {key} => tombstone")
 
     def _save_local_data(self):
-        """Сохранение локального состояния (task_shares / active_tasks) в JSON."""
+       
         if self.ephemeral_mode:
             return
         out = {
@@ -783,7 +773,7 @@ class MiningModule:
             self.logger.error(f"[MiningModule] _save_local_data => {e}")
 
     def _load_local_data(self):
-        """Загрузка локального состояния из JSON (если не ephemeral_mode)."""
+       
         if not os.path.isfile(self.data_file):
             self.logger.info(f"[MiningModule] no file => skip => {self.data_file}")
             return
@@ -813,14 +803,14 @@ class MiningModule:
             self.logger.error(f"[MiningModule] load error => {e}")
 
     def _aes_encrypt(self, plain: bytes) -> bytes:
-        """Шифрование AES-GCM (если включено)."""
+       
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
         aes = AESGCM(self.secret_key)
         nonce = os.urandom(12)
         return nonce + aes.encrypt(nonce, plain, None)
 
     def _aes_decrypt(self, enc: bytes) -> bytes:
-        """Расшифровка AES-GCM (если включено)."""
+       
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
         aes = AESGCM(self.secret_key)
         if len(enc) < 12:
@@ -830,7 +820,7 @@ class MiningModule:
         return aes.decrypt(nonce, cipher, None)
 
     def _derive_key_from_passphrase(self, passphrase: str) -> bytes:
-        """Генерация 32-байтного ключа из пароля (PBKDF2)."""
+       
         from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
         from cryptography.hazmat.primitives import hashes
         salt = (self.node_id + "_mining_module").encode("utf-8")
