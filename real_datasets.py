@@ -1,11 +1,11 @@
 # real_datasets.py
-
+# here you can put your code to train the model
 import numpy as np
 from sklearn.datasets import load_iris
 
 class RealDatasets:
     def __init__(self):
-        # Пример: встроенный iris
+       
         iris = load_iris()
         X = iris.data
         y = iris.target
@@ -24,10 +24,7 @@ class RealDatasets:
         }
 
     def upload_custom_dataset(self, dataset_id: str, X_train, y_train, X_val, y_val):
-        """
-        Пользовательский датасет загружается в память.
-        В реальном решении — хранение в БД / IPFS / Chord / etc.
-        """
+     
         if dataset_id in self.datasets:
             raise ValueError(f"Dataset {dataset_id} уже существует.")
         self.datasets[dataset_id] = {
@@ -38,10 +35,7 @@ class RealDatasets:
         }
 
     def get_dataset_shard(self, dataset_id: str, shard_index: int, shard_size: int):
-        """
-        Возвращаем фрагмент (шард) [shard_index : shard_index + shard_size]
-        для train, а val целиком (или тоже шардим — по желанию).
-        """
+       
         if dataset_id not in self.datasets:
             raise ValueError(f"Unknown dataset_id={dataset_id}")
 
