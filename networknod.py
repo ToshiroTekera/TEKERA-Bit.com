@@ -109,9 +109,9 @@ class NodeNetwork:
         self.connections: Dict[str, websockets.WebSocketClientProtocol] = {}
         self._connections_lock = asyncio.Lock()
 
-        # Token-bucket для rate limit
+      
         self.token_buckets: Dict[str, Dict[str, float]] = {}
-        # Храним последние msg_id, чтобы избежать &laquo;реплеев&raquo;
+       
         self._recent_msg_ids: Dict[str, float] = {}
 
         # Chord / HotStuff / Mining
@@ -157,7 +157,7 @@ class NodeNetwork:
 
         self._stop_flag = False
 
-        # Список узлов, к которым пытаемся подключиться клиентом
+        
         self.outgoing_endpoints: Dict[str, Dict[str,Any]] = {}
         self._reconnect_task: Optional[asyncio.Task] = None
 
@@ -298,7 +298,7 @@ class NodeNetwork:
   
         self.logger.debug(f"[NodeNetwork {self.my_address}] connect_to_node => address={other_address}, host={host}, port={port}")
     
-        # Проверяем, есть ли уже подключение
+        
         async with self._connections_lock:
             if other_address in self.connections:
                 self.logger.warning(f"[{self.my_address}] connect_to_node => already have ws => {other_address}")
@@ -331,18 +331,18 @@ class NodeNetwork:
                     ).decode("utf-8")
                 else:
                     self.logger.error(f"[{self.my_address}] connect_to_node => missing pubkey for registration!")
-                    return False  # Ошибка, если ключ отсутствует
+                    return False 
 
             self.logger.debug(f"[{self.my_address}] sending register => {init_msg}")
             await ws.send(json.dumps(init_msg))
 
-            # Добавляем соединение в список активных
+           
             async with self._connections_lock:
                 self.connections[other_address] = ws
 
             self.logger.info(f"[{self.my_address}] connected => address={other_address} => {url}")
 
-            # Запускаем обработчик входящих сообщений в фоне
+           
             asyncio.create_task(self._client_reader_loop(other_address, ws))
             return True
 
@@ -565,7 +565,7 @@ class NodeNetwork:
 
             self.logger.info(f"[NodeNetwork] address={remote_address} connected from IP={ip_addr}")
 
-            # Обрабатываем входящие сообщения в бесконечном цикле
+           
             async for raw_msg2 in websocket:
                 self.logger.info(f"[NodeNetwork {self.my_address}] handle_connection => next msg => {raw_msg2[:200]}")
             
@@ -777,17 +777,14 @@ class NodeNetwork:
     # HOTSTUFF
     # ----------------------------------------------------------------
     async def _handle_hotstuff_message(self, sender_addr: str, data: dict):
-        """
-        Обработка входящих HotStuff-сообщений (ECDSA-only).
-        """
+     
         if not self.hotstuff_consensus:
             logger.warning("[NodeNetwork] no hotstuff_consensus => skip.")
             return
 
         msg_type = data.get("type", "")
 
-        # Тут больше нет BLS/threshold. 
-        # Мы лишь проверяем ECDSA-подпись (уже проверена в process_incoming_message, но дублировать не страшно).
+       
         if not self._verify_message_signature(data):
             logger.warning(f"[NodeNetwork] Invalid ECDSA signature => skip hotstuff msg.")
             return
@@ -802,14 +799,14 @@ class NodeNetwork:
                     forced_view=data.get("view")
                 )
             else:
-                # стандартная обработка фаз
+              
                 await self.hotstuff_consensus.handle_phase_message(data, sender_addr)
 
         elif msg_type == "hotstuff_chain_complaint":
             await self.hotstuff_consensus.handle_complaint_message(data, sender_addr)
 
         elif msg_type == "hotstuff_chain_timeout":
-            # если у вас есть _handle_timeout
+           
             await self.hotstuff_consensus._handle_timeout(data)
 
         else:
@@ -891,9 +888,7 @@ class NodeNetwork:
         except Exception as e:
             self.logger.warning(f"[NodeNetwork] _send_raw => error => {node_id}, e={e}")
 
-    # ----------------------------------------------------------------
-    # Helpers
-    # ----------------------------------------------------------------
+   
     def _extract_ip(self, ws: websockets.WebSocketServerProtocol) -> str:
         if ws.remote_address:
             return ws.remote_address[0]
@@ -1004,22 +999,22 @@ class NodeNetwork:
         if not self.key_manager:
             raise ValueError("[NodeNetwork] _sign_message => no key_manager configured.")
 
-        # Делаем копию, чтобы не портить исходный словарь
+       
         msg_cpy = dict(msg)
 
-        # Удаляем поля, которые мы не включаем в хеш
+        
         for f in ("signature", "msg_id", "rpc_id", "type", "phase"):
             msg_cpy.pop(f, None)
 
-        # Сериализуем в JSON (с sort_keys=True, как при проверке)
+       
         raw = json.dumps(msg_cpy, sort_keys=True).encode("utf-8")
 
-        # Берём приватный ключ (должен возвращать объект ec.EllipticCurvePrivateKey)
+        
         privkey = self.key_manager.get_ec_privkey(sender_addr)
         if not privkey:
             raise ValueError(f"[NodeNetwork] _sign_message => no EC privkey for {sender_addr}")
 
-        # Подписываем
+      
         signature_bin = privkey.sign(raw, ec.ECDSA(hashes.SHA256()))
         signature_hex = signature_bin.hex()
 
