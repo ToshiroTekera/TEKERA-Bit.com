@@ -31,14 +31,14 @@ def hmac_sha256(key: bytes, data: bytes) -> bytes:
 class SenderChunk:
     def __init__(self, chunk_idx: int, shares: List[bytes], K: int, M: int):
         self.chunk_idx = chunk_idx
-        self.shares = shares   # список байтов каждого шарда
+        self.shares = shares   
         self.K = K
         self.M = M
         self.N = K + M
 
-        self.received_mask = [False] * self.N  # если нужно
+        self.received_mask = [False] * self.N  
         self.done = False
-        self.resend_count = [0] * self.N      # ограничение resend
+        self.resend_count = [0] * self.N      
 
 class SenderFlow:
     def __init__(self, flow_id: bytes, chunk_count: int):
@@ -47,7 +47,7 @@ class SenderFlow:
         self.chunks: Dict[int, SenderChunk] = {}
         self.start_ts = time.time()
         self.done = False
-        # Добавим счётчик NACK для защиты
+       
         self.nack_count = 0
 
 class ReceiverFlow:
@@ -62,22 +62,22 @@ class ReceiverFlow:
         self.chunk_done = [False]*chunk_count
         self.done = False
         self.start_ts = time.time()
-        self.last_nack_ts = 0.0   # когда последний раз слали NACK
+        self.last_nack_ts = 0.0  
 
 
 class FecChannel:
  
 
-    ACK_INTERVAL = 2.0           # как часто проверять receiver flows
-    FLOW_TIMEOUT = 120.0         # через сколько секунд удалить (receiver) flow, если не собран
-    MAX_RESEND_ATTEMPTS = 5      # cколько раз можно пересылать 1 share
-    MAX_NACK_PER_FLOW = 20       # лимит NACK
-    INFLIGHT_LIMIT = 50_000_000  # 50MB “в полёте”
+    ACK_INTERVAL = 2.0          
+    FLOW_TIMEOUT = 120.0         
+    MAX_RESEND_ATTEMPTS = 5      
+    MAX_NACK_PER_FLOW = 20       
+    INFLIGHT_LIMIT = 50_000_000  
 
     def __init__(
         self,
         datachannel: RTCDataChannel,
-        # Параметры FEC (если не adaptive):
+        
         K: int = 10,
         M: int = 2,
         do_compress: bool = True,
@@ -88,17 +88,7 @@ class FecChannel:
         assembled_cb=None,
         adaptive_fec: bool = False
     ):
-        """
-        :param datachannel: RTCDataChannel для отправки/приёма
-        :param K, M: базовые параметры, если adaptive_fec=False
-        :param do_compress: lz4-сжатие
-        :param secret_key: HMAC-ключ (или None)
-        :param ack_interval: как часто bg-loop
-        :param max_resend_attempts: лимит resend
-        :param chunk_size: размер чанка
-        :param assembled_cb: callback(flow_id, raw_data), когда собран весь файл
-        :param adaptive_fec: если True, при send_file(...) K,M берём из _choose_fec_params
-        """
+    
         self.dc = datachannel
         self.K = K
         self.M = M
@@ -114,10 +104,10 @@ class FecChannel:
         self.sender_flows: Dict[bytes, SenderFlow] = {}
         self.rx_flows: Dict[bytes, ReceiverFlow] = {}
 
-        # Фоновая задача
+        
         self._bg_task = asyncio.create_task(self._bg_loop())
 
-        # Подписка на сообщения
+       
         self.dc.on("message", self._on_message)
         logger.info("[FecChannel] created => listening datachannel messages...")
 
@@ -237,8 +227,8 @@ class FecChannel:
         N= sc.N
         flow_id= sf.flow_id
 
-        # Собираем пакет
-        # packet = [TYPE_DATA] + flow_id(16) + chunk_idx(2) + share_idx(2) + N(2) + shard_data + [hmac?]
+       
+       
         header= bytearray([TYPE_DATA])
         header+= flow_id
         header+= chunk_idx.to_bytes(2,'big')
@@ -357,7 +347,7 @@ class FecChannel:
         async def handle_data():
             rf= self.rx_flows.get(flow_id)
             if not rf:
-                # Предположим chunk_count=1
+                
                 chunk_count=1
                 K= max(1, totalN-2)
                 M= totalN-K
