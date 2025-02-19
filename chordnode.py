@@ -32,13 +32,7 @@ class LWWValue:
 
 
 class ChordNode:
-    """
-    &laquo;Адресная&raquo; версия Chord:
-      - Вместо node_id => my_address,
-      - Все RPC‐вызовы будут обращаться к 'target_address',
-      - Внутренне мы храним 'my_hash' = sha1_hash(my_address).
-    """
-
+ 
     RPC_TIMEOUT = 20.0
     BAN_DURATION = 120.0
     TTL_FIND_SUCCESSOR = 15.0
@@ -168,9 +162,7 @@ class ChordNode:
     # FIND SUCCESSOR
     # ----------------------------------------------------------------
     async def chord_find_successor(self, hkey: int) -> Tuple[str,int]:
-        """
-        Этот метод вызывается из `network.process_incoming_message(...)`.
-        """
+       
         now = time.time()
         # Кэш
         if hkey in self._fs_cache:
