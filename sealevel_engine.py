@@ -15,9 +15,7 @@ class BaseTransaction:
         self.write_keys: Set[str] = set()
 
     async def execute(self, global_state: Dict[str, Any]):
-        """
-        Переопределить в потомках. Здесь — заглушка.
-        """
+     
         raise NotImplementedError("BaseTransaction.execute(...) not implemented.")
 
 
@@ -52,41 +50,41 @@ class AdvancedSealevelEngine:
                 self.logger.info("[AdvSealevelEngine] process_batch => empty => skip.")
                 return
 
-            # (1) Сортируем по fee
+            
             tx_list = sorted(tx_list, key=lambda t: t.fee, reverse=True)
 
-            # (2) Строим граф конфликтов
-            #  adj[i] = список индексов tx, конфликтующих с i
+           
+           
             adj = [[] for _ in range(n)]
-            write_map = defaultdict(list)  # ключ -> список индексов
+            write_map = defaultdict(list) 
 
-            # Составляем write_map
+            
             for i, txA in enumerate(tx_list):
                 for wkey in txA.write_keys:
                     write_map[wkey].append(i)
 
-            # Пробегаем каждую tx и собираем конфликтные
+           
             for i, txA in enumerate(tx_list):
                 conflict_set = set()
                 for wkey in txA.write_keys:
                     conflict_set |= set(write_map[wkey])
-                # Учитываем, что одна tx не конфликтует сама с собой
+               
                 conflict_set.discard(i)
 
-                # Проверяем все члены conflict_set на действительный конфликт
+              
                 for j in conflict_set:
                     txB = tx_list[j]
                     if self._is_conflict(txA, txB):
                         adj[i].append(j)
                         adj[j].append(i)
 
-            # (3) Раскраска графа => assigned_color[i] = номер слоя
+            
             assigned_color = self._graph_coloring(adj)
             max_color = max(assigned_color)
             self.logger.info(f"[AdvSealevelEngine] graph => {n} tx, max_color={max_color}")
 
-            # (4) Собираем "слои" = все tx, у которых цвет == c
-            #    Если layer_cu_limit задан — делим слой на подслои
+           
+            
             layers: List[List[int]] = []
             for color_id in range(max_color + 1):
                 # все tx с assigned_color == color_id
@@ -95,16 +93,16 @@ class AdvancedSealevelEngine:
                     continue
 
                 if not self.layer_cu_limit:
-                    # без деления
+                   
                     layers.append(same_color)
                 else:
-                    # делим на подслои, чтобы не превышать layer_cu_limit
+                   
                     sublayer = []
                     sub_cu = 0
                     for idx in same_color:
                         cu = tx_list[idx].compute_units
                         if sub_cu + cu > self.layer_cu_limit and sublayer:
-                            # завершаем предыдущую группу
+                           
                             layers.append(sublayer)
                             sublayer = [idx]
                             sub_cu = cu
@@ -114,7 +112,7 @@ class AdvancedSealevelEngine:
                     if sublayer:
                         layers.append(sublayer)
 
-            # (5) Исполнение по слоям (асинхронно)
+           
             layer_count = len(layers)
             self.logger.info(f"[AdvSealevelEngine] total_layers={layer_count}, total_tx={n}")
 
@@ -129,7 +127,7 @@ class AdvancedSealevelEngine:
                     loop = asyncio.get_running_loop()
                     await loop.run_in_executor(self._proc_executor, self._sync_execute, tx)
                 else:
-                    # Обычная asyncio-версия
+                    
                     if sem:
                         async with sem:
                             await tx.execute(self.global_state)
@@ -160,9 +158,7 @@ class AdvancedSealevelEngine:
         return False
 
     def _graph_coloring(self, adj: List[List[int]]) -> List[int]:
-        """
-        Простейшая раскраска: color_of[i] = наименьший цвет, не занятый соседями.
-        """
+        
         n = len(adj)
         color_of = [-1]*n
         for i in range(n):
