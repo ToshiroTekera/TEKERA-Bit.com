@@ -56,7 +56,7 @@ class CubicMatrix:
         self.use_encryption = use_encryption
 
         x, y, z = dimension
-        # Инициализируем 3D-матрицу CRDTCell
+        
         self.matrix: List[List[List[CRDTCell]]] = [
             [
                 [CRDTCell() for _ in range(z)]
@@ -65,27 +65,27 @@ class CubicMatrix:
             for _ in range(x)
         ]
 
-        # shard_info: индекс шарда -> {version, nonce, signature, hash}
+        # shard_info:  -> {version, nonce, signature, hash}
         self.shard_info: Dict[int, Dict[str, Any]] = {}
 
-        # Генерируем aes_key, если use_encryption
+      
         self.aes_key = None
         if self.use_encryption:
             self.aes_key = AESGCM.generate_key(bit_length=256)
 
-        # Локальный файл
+        
         if not data_file:
             self.data_file = f"cubic_matrix_{node_id}.json"
         else:
             self.data_file = data_file
 
-        # Блокировка (асинхронная) для операций с self.matrix
+        
         self._matrix_lock = asyncio.Lock()
 
         logging.info(f"[CubicMatrix] init => node={node_id}, dimension={dimension}, "
                      f"shard_size={shard_size}, encryption={use_encryption}")
 
-        # Пытаемся загрузить локальные данные (demo)
+       
         self._load_local_data()
 
     # ----------------------------------------------------------------
@@ -268,7 +268,7 @@ class CubicMatrix:
         shard_data = record["shard_data"]
         await self._apply_shard_data_async(shard_data)
 
-        # 2) обновляем shard_info
+        
         shard_hash = self.compute_shard_hash(shard_index)
         self.shard_info[shard_index] = {
             "version": new_ver,
@@ -327,13 +327,9 @@ class CubicMatrix:
             self.poh.record_event(event_data)
             logging.info(f"[CubicMatrix] shard={shard_index} committed in PoH, hash={shard_hash}")
 
-    # ----------------------------------------------------------------
-    # Локальное сохранение всей 3D-матрицы (demo)
-    # ----------------------------------------------------------------
+ 
     async def save_local_data(self):
-        """
-        Сохраняем весь 3D-массив (matrix) + shard_info в JSON-файл.
-        """
+        
         try:
             async with self._matrix_lock:
                 matrix_list = []
@@ -415,7 +411,7 @@ class CubicMatrix:
             logging.error(f"[CubicMatrix] _load_local_data => error => {e}")
                   
     # ----------------------------------------------------------------
-    # Шард -> Chord
+    # Chord
     # ----------------------------------------------------------------
     async def store_shard_in_chord(self, shard_index: int):
         """
@@ -450,13 +446,10 @@ class CubicMatrix:
         logging.info(f"[CubicMatrix] store_shard_in_chord => shard={shard_index}, ver={info['version']} saved")
 
     # ----------------------------------------------------------------
-    # Передача шарда через Network (Turbine / FEC)
+    #  Network (Turbine / FEC)
     # ----------------------------------------------------------------
     async def broadcast_shard(self, shard_index: int):
-        """
-        Старый метод: просто network.broadcast_transaction(...) => JSON.
-        Если шард большой, могут быть проблемы.
-        """
+      
         if not self.network:
             logging.error("[CubicMatrix] broadcast_shard => no network => skip.")
             return
@@ -478,9 +471,7 @@ class CubicMatrix:
         logging.info(f"[CubicMatrix] broadcast_shard => shard={shard_index}, ver={info['version']}")
 
     async def turbine_broadcast_shard(self, shard_index: int, all_peers: List[str], fanout: int = 3):
-        """
-        Пример chunk+lz4 через TurbineManager
-        """
+        
         if not self.network or not hasattr(self.network, "turbine_manager"):
             logging.error("[CubicMatrix] turbine_broadcast_shard => no turbine_manager => skip.")
             return
@@ -511,9 +502,7 @@ class CubicMatrix:
         logging.info(f"[CubicMatrix] turbine_broadcast_shard => shard={shard_index}, flow_id={flow_id}, fanout={fanout}")
 
     def fec_broadcast_shard(self, shard_index: int):
-        """
-        Пример использования FecChannel (WebRTC).
-        """
+       
         if not self.network or not hasattr(self.network, "fec_channel") or not self.network.fec_channel:
             logging.error("[CubicMatrix] fec_broadcast_shard => no fec_channel => skip.")
             return
@@ -537,9 +526,7 @@ class CubicMatrix:
 
    
     def merge_shard_if_newer(self, shard_index: int, new_data: dict, new_version: int, new_signature: str):
-        """
-        Сравниваем версию, если новее - применяем, пересчитываем hash, обновляем shard_info.
-        """
+       
         old_info = self.shard_info.get(shard_index, {"version":0,"nonce":None,"signature":None,"hash":None})
         if new_version <= old_info["version"]:
             logging.info(f"[CubicMatrix] ignoring shard={shard_index}, new_ver={new_version} <= local={old_info['version']}")
